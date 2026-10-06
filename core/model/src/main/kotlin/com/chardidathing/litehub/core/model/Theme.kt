@@ -28,6 +28,8 @@ data class Theme(
     val radii: Radii,
     // dp, square
     val iconSize: Float,
+    // dp, the smallest thing a finger is asked to hit (keypads, menu rows)
+    val touchTarget: Float,
     val font: String,
     val type: TypeScale,
     val motion: Motion,

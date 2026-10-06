@@ -19,6 +19,9 @@ object Presets {
     // md2 says 24, a wall panel is read from further away
     private val iconSize = 32f
 
+    // md2 asks for 48, a wall panel gets tapped standing up
+    private val touchTarget = 64f
+
     // the longest a page settle may take, a full 1920px page from rest
     private val motion = Motion(animations = true, pageSettleMs = 300)
 
@@ -70,6 +73,7 @@ object Presets {
         spacing = spacing,
         radii = radii,
         iconSize = iconSize,
+        touchTarget = touchTarget,
         font = Fonts.LEXEND,
         type = type,
         motion = motion,
@@ -97,6 +101,7 @@ object Presets {
         spacing = spacing,
         radii = radii,
         iconSize = iconSize,
+        touchTarget = touchTarget,
         font = Fonts.LEXEND,
         type = type,
         motion = motion,

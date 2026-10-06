@@ -30,6 +30,8 @@ class ResolvedTheme(theme: Theme, metrics: DisplayMetrics, fonts: Fonts, lowTier
 
     val iconSize = dp(theme.iconSize, metrics)
 
+    val touchTarget = dp(theme.touchTarget, metrics)
+
     // zero when animations are off, so callers jump straight to the end state
     val pageSettleMs = if (theme.motion.animations && !lowTier) theme.motion.pageSettleMs else 0
 
