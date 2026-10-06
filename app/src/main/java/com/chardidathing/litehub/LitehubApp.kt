@@ -2,27 +2,34 @@ package com.chardidathing.litehub
 
 import android.app.Application
 import android.os.Build
-import kotlinx.coroutines.launch
 import com.chardidathing.litehub.core.config.ConfigException
+import com.chardidathing.litehub.core.config.HubSettings
+import com.chardidathing.litehub.core.config.SavedSettings
 import com.chardidathing.litehub.core.config.SettingsCodec
+import com.chardidathing.litehub.core.config.SettingsForm
 import com.chardidathing.litehub.core.config.SourcesCodec
 import com.chardidathing.litehub.core.model.DeviceSettings
 import com.chardidathing.litehub.core.model.Sources
 import com.chardidathing.litehub.source.calendar.CalendarRepository
 import com.chardidathing.litehub.source.calendar.CalendarStore
-import com.chardidathing.litehub.source.fetch.Fetcher
 import com.chardidathing.litehub.source.feed.FeedRepository
 import com.chardidathing.litehub.source.feed.FeedStore
+import com.chardidathing.litehub.source.fetch.Fetcher
 import com.chardidathing.litehub.source.ha.EntityCache
 import com.chardidathing.litehub.source.ha.EntityRepository
 import com.chardidathing.litehub.source.ha.HaCredentials
 import com.chardidathing.litehub.source.weather.WeatherRepository
 import com.chardidathing.litehub.ui.components.Icons
 import com.chardidathing.litehub.ui.tokens.Fonts
-import okhttp3.Cache
-import okhttp3.OkHttpClient
 import java.io.File
 import java.io.IOException
+import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.doubleOrNull
+import okhttp3.Cache
+import okhttp3.OkHttpClient
 
 // hand wired singletons. every one of these reads disk, so first touch them off the main thread.
 // the source backed ones can be dropped and rebuilt by reload() after their files change
@@ -107,6 +114,42 @@ class LitehubApp : Application() {
         web.apply()
         dlna.apply()
         scope.launch { screensaver.reload() }
+    }
+
+    // what the settings screens edit, read from disk. a broken sources.json shows as empty and is
+    // only written over if the lists are actually changed. blocking
+    fun hubSettings(): HubSettings {
+        val ha = HaCredentials.load(File(filesDir, HA_FILE)).getOrNull()
+        return HubSettings(settings, sources.getOrElse { Sources(SourcesCodec.VERSION) }, ha?.url, !ha?.token.isNullOrEmpty())
+    }
+
+    // writes whatever a save changed. true when sources or ha changed, the dashboard then has to
+    // reload to pick them up. blocking
+    fun saveAll(before: HubSettings, saved: SavedSettings): Boolean {
+        if (saved.device != before.device) updateSettings(saved.device)
+        var reload = false
+        if (saved.sources != before.sources) {
+            File(filesDir, SOURCES_FILE).writeAtomic(SourcesCodec.encode(saved.sources))
+            reload = true
+        }
+        saved.ha?.let { edit ->
+            val token = edit.token ?: HaCredentials.load(File(filesDir, HA_FILE)).getOrNull()?.token
+                ?: throw IOException("a long lived token is needed the first time")
+            File(filesDir, HA_FILE).writeAtomic(Json.encodeToString(HaCredentials.serializer(), HaCredentials(edit.url, token)))
+            reload = true
+        }
+        return reload
+    }
+
+    // the buttons in settings sections that fill fields in, the same for the device and the web
+    suspend fun settingsAction(id: String): Result<JsonObject> = when (id) {
+        SettingsForm.HA_HOME -> ha.command("get_config", JsonObject(emptyMap())).mapCatching { result ->
+            val config = result as? JsonObject ?: throw IOException("home assistant didn't send its config")
+            val lat = (config["latitude"] as? JsonPrimitive)?.doubleOrNull ?: throw IOException("home assistant has no home location")
+            val lon = (config["longitude"] as? JsonPrimitive)?.doubleOrNull ?: throw IOException("home assistant has no home location")
+            JsonObject(mapOf("location.set" to JsonPrimitive(true), "location.latitude" to JsonPrimitive(lat), "location.longitude" to JsonPrimitive(lon)))
+        }
+        else -> Result.failure(IOException("there's no action called $id"))
     }
 
     // forget everything read from ha.json, sources.json and settings.json, next use reads again

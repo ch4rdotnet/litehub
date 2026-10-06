@@ -8,7 +8,8 @@ import android.view.MotionEvent
 import android.view.View
 import android.widget.FrameLayout
 import com.chardidathing.litehub.core.config.ConfigException
-import com.chardidathing.litehub.core.config.DeviceForm
+import com.chardidathing.litehub.core.config.HubSettings
+import com.chardidathing.litehub.core.config.SettingsForm
 import com.chardidathing.litehub.core.config.Pin
 import com.chardidathing.litehub.ui.editor.EntityPicker
 import com.chardidathing.litehub.ui.editor.SettingsScreen
@@ -97,31 +98,41 @@ class AdminFlow(
 
     private fun settings() {
         val t = theme ?: return
-        val s = SettingsScreen(activity, t, DeviceForm.sections, DeviceForm.values(app.settings), listOf(device()), object : SettingsScreen.Host {
-            override fun pickEntity(domains: List<String>, onPicked: (String) -> Unit) = pick(t, domains, onPicked)
-            override fun save(values: JsonObject) {
-                hideKeyboard()
-                scope.launch {
-                    val result = withContext(Dispatchers.IO) {
-                        try {
-                            app.updateSettings(DeviceForm.apply(app.settings, values))
-                            null
-                        } catch (e: ConfigException) {
-                            e.message
-                        } catch (e: IOException) {
-                            "couldn't write settings.json, ${e.message}"
-                        }
-                    }
-                    if (result == null) menu() else screen?.say(result, error = true)
+        scope.launch {
+            val before = withContext(Dispatchers.IO) { app.hubSettings() }
+            val s = SettingsScreen(activity, t, SettingsForm.sections, SettingsForm.values(before), listOf(device()), object : SettingsScreen.Host {
+                override fun pickEntity(domains: List<String>, onPicked: (String) -> Unit) = pick(t, domains, onPicked)
+                override fun newItem(section: String) = SettingsForm.newItem(section)
+                override fun action(id: String, done: (Result<JsonObject>) -> Unit) {
+                    scope.launch { done(app.settingsAction(id)) }
                 }
+                override fun save(values: JsonObject) {
+                    hideKeyboard()
+                    scope.launch { save(before, values) }
+                }
+                override fun cancel() {
+                    hideKeyboard()
+                    menu()
+                }
+            })
+            screen = s
+            show(s, SETTINGS_IDLE_MS)
+        }
+    }
+
+    // sources or ha changing means the dashboard reloads, anything else applies in place
+    private suspend fun save(before: HubSettings, values: JsonObject) {
+        val outcome = withContext(Dispatchers.IO) {
+            try {
+                Result.success(app.saveAll(before, SettingsForm.apply(before, values)))
+            } catch (e: ConfigException) {
+                Result.failure(e)
+            } catch (e: IOException) {
+                Result.failure(IOException("couldn't save, ${e.message}", e))
             }
-            override fun cancel() {
-                hideKeyboard()
-                menu()
-            }
-        })
-        screen = s
-        show(s, SETTINGS_IDLE_MS)
+        }
+        outcome.onSuccess { reload -> if (reload) onReload() else menu() }
+            .onFailure { screen?.say(it.message ?: "couldn't save", error = true) }
     }
 
     private fun backToSettings() {
