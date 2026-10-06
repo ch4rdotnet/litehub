@@ -118,12 +118,11 @@ class LitehubApp : Application() {
         scope.launch { screensaver.reload() }
     }
 
-    // photos from the screensaver's source, for the screensaver and photo tiles. low ram devices go
-    // without, it's one of the first things they give up
+    // photos from the screensaver's source, for the screensaver and photo tiles. low ram devices keep
+    // them, a screen sized photo is a few mb and the whole hub sits around 50
     fun photoFrame(): Result<PhotoFrame> {
         val s = settings.screensaver
         val photos = s.photos ?: return Result.failure(IOException("no photos set up, pick a source in the screensaver settings"))
-        if (DeviceTier.isLow(this)) return Result.failure(IOException("photos are off on devices this low on memory"))
         return Result.success(PhotoFrame(photos, s.photoRefreshMinutes * MINUTE_MS, ha, http))
     }
 
