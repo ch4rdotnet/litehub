@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "activeDashboard": "home",
+  "dashboards": [
+    {
+      "id": "home",
+      "name": "home",
+      "theme": { "mode": "system", "light": "md2-light", "dark": "md2-dark" },
+      "pages": [
+        {
+          "id": "main",
+          "columns": 4,
+          "rows": 3,
+          "widgets": [
+            { "x": 0, "y": 0, "w": 2, "h": 1, "type": "placeholder", "config": { "title": "clock" } },
+            { "x": 2, "y": 0, "w": 2, "h": 1, "type": "placeholder", "config": { "title": "weather" } },
+            { "x": 0, "y": 1, "w": 2, "h": 2, "type": "placeholder", "config": { "title": "calendar" } },
+            { "x": 2, "y": 1, "w": 1, "h": 1, "type": "placeholder", "config": { "title": "lights" } },
+            { "x": 3, "y": 1, "w": 1, "h": 1, "type": "placeholder", "config": { "title": "climate" } },
+            { "x": 2, "y": 2, "w": 2, "h": 1, "type": "placeholder", "config": { "title": "media" } }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -32,3 +32,9 @@ android {
         targetCompatibility = JavaVersion.VERSION_11
     }
 }
+
+dependencies {
+    implementation(project(":core:config"))
+    implementation(project(":ui:widgets"))
+    implementation(libs.kotlinx.coroutines.android)
+}
