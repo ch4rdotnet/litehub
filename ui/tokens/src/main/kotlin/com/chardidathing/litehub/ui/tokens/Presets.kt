@@ -24,7 +24,8 @@ object Presets {
 
     // the longest a page settle may take, a full 1920px page from rest
     // a photo frame crossfade is slow on purpose, it should read as calm not as a transition
-    private val motion = Motion(animations = true, pageSettleMs = 300, crossfadeMs = 1500)
+    // panels and banners sliding in, quick enough not to hold anything up
+    private val motion = Motion(animations = true, pageSettleMs = 300, crossfadeMs = 1500, slideMs = 250)
 
     // md2 palette, 500s on light and 200s on dark so they read against either surface
     private val paletteLight = listOf(
@@ -122,6 +123,9 @@ object Presets {
 
     // what a "screen off" overlay draws, black pixels are dark on lcd and off on oled
     const val SCREEN_OFF = 0xFF000000.toInt()
+
+    // md2's 32% black scrim, dims the page under the shade so the two don't run together
+    const val SCRIM = 0x52000000
 
     // used when there's no usable config to pick a theme from
     val fallbackLight = md2Light

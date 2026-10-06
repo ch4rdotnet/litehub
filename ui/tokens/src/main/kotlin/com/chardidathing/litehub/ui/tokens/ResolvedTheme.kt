@@ -39,6 +39,8 @@ class ResolvedTheme(theme: Theme, metrics: DisplayMetrics, fonts: Fonts, lowTier
 
     val crossfadeMs = if (theme.motion.animations && !lowTier) theme.motion.crossfadeMs else 0
 
+    val slideMs = if (theme.motion.animations && !lowTier) theme.motion.slideMs else 0
+
     val type = with(theme.type) {
         fun r(style: TextStyle) = Text(
             size = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, style.size, metrics),
