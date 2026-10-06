@@ -15,7 +15,7 @@ import java.io.IOException
 sealed interface Screen {
     val theme: ResolvedTheme
 
-    class Ready(override val theme: ResolvedTheme, val page: Page, val icons: Icons) : Screen
+    class Ready(override val theme: ResolvedTheme, val pages: List<Page>, val icons: Icons) : Screen
 
     class Failed(override val theme: ResolvedTheme, val reason: String) : Screen
 }
@@ -30,10 +30,10 @@ class DashboardLoader(private val app: LitehubApp) {
         val config = ConfigCodec.decode(text)
         val dashboard = config.dashboards.first { it.id == config.activeDashboard }
         val theme = Themes(Presets.all, config.themes).select(dashboard.theme, systemDark)
-        val page = dashboard.pages.first()
-        val entityIds = page.widgets.mapNotNull(WidgetCatalog::entityId)
+        // every page, so a swipe lands on cached state rather than "connecting"
+        val entityIds = dashboard.pages.flatMap { it.widgets }.mapNotNull(WidgetCatalog::entityId)
         if (entityIds.isNotEmpty()) app.ha.preload(entityIds)
-        Screen.Ready(ResolvedTheme(theme, metrics, app.fonts), page, app.icons)
+        Screen.Ready(ResolvedTheme(theme, metrics, app.fonts, DeviceTier.isLow(app)), dashboard.pages, app.icons)
     } catch (e: ConfigException) {
         failed(e.message.orEmpty(), systemDark, metrics)
     } catch (e: IOException) {
@@ -55,6 +55,6 @@ class DashboardLoader(private val app: LitehubApp) {
 
     private fun failed(reason: String, systemDark: Boolean, metrics: DisplayMetrics): Screen {
         val theme = if (systemDark) Presets.fallbackDark else Presets.fallbackLight
-        return Screen.Failed(ResolvedTheme(theme, metrics, app.fonts), reason)
+        return Screen.Failed(ResolvedTheme(theme, metrics, app.fonts, DeviceTier.isLow(app)), reason)
     }
 }
