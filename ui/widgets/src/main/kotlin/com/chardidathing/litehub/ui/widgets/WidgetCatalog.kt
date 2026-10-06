@@ -5,6 +5,7 @@ import com.chardidathing.litehub.core.model.Placement
 import com.chardidathing.litehub.ui.components.Icons
 import com.chardidathing.litehub.ui.components.WidgetView
 import com.chardidathing.litehub.ui.tokens.ResolvedTheme
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
@@ -17,7 +18,7 @@ object WidgetCatalog {
     // the entity a placement needs, so its state can be loaded before the first frame
     fun entityId(placement: Placement): String? = entityConfig(placement)?.entity
 
-    fun create(context: Context, theme: ResolvedTheme, icons: Icons, placement: Placement): WidgetView {
+    fun create(context: Context, theme: ResolvedTheme, icons: Icons, legend: Legend, placement: Placement): WidgetView {
         val type = placement.type
         return when (type) {
             "placeholder" -> PlaceholderWidget(
@@ -31,6 +32,12 @@ object WidgetCatalog {
                 if (type == "entity") EntityTileWidget(context, theme, icons, config)
                 else SensorWidget(context, theme, icons, config)
             }
+            "agenda" -> decode(placement, AgendaConfig.serializer())?.let { AgendaWidget(context, theme, it, legend) }
+                ?: broken(context, theme, "agenda config isn't valid", "see the agenda widget's fields")
+            "month" -> decode(placement, MonthConfig.serializer())?.let { MonthWidget(context, theme, it, legend) }
+                ?: broken(context, theme, "month config isn't valid", "see the month widget's fields")
+            "headlines" -> decode(placement, HeadlinesConfig.serializer())?.let { HeadlinesWidget(context, theme, it, legend) }
+                ?: broken(context, theme, "headlines config isn't valid", "see the headlines widget's fields")
             // shown as a failure, not dropped, so a typo in the config is visible on screen
             else -> broken(context, theme, "unknown widget", type)
         }
@@ -38,13 +45,15 @@ object WidgetCatalog {
 
     private fun entityConfig(placement: Placement): EntityConfig? {
         if (placement.type != "entity" && placement.type != "sensor") return null
-        return try {
-            json.decodeFromJsonElement(EntityConfig.serializer(), placement.config)
-        } catch (e: SerializationException) {
-            null
-        } catch (e: IllegalArgumentException) {
-            null
-        }
+        return decode(placement, EntityConfig.serializer())
+    }
+
+    private fun <T> decode(placement: Placement, serializer: KSerializer<T>): T? = try {
+        json.decodeFromJsonElement(serializer, placement.config)
+    } catch (e: SerializationException) {
+        null
+    } catch (e: IllegalArgumentException) {
+        null
     }
 
     private fun broken(context: Context, theme: ResolvedTheme, title: String, detail: String) =

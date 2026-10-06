@@ -19,4 +19,5 @@ android {
 
 dependencies {
     api(project(":ui:components"))
+    testImplementation(libs.junit)
 }
