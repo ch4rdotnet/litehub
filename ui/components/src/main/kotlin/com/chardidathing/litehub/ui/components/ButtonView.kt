@@ -8,6 +8,7 @@ import android.text.Layout
 import android.view.MotionEvent
 import android.view.View
 import com.chardidathing.litehub.ui.tokens.ResolvedTheme
+import kotlin.math.ceil
 
 // a touch target sized button, surface coloured, primary while pressed or checked.
 // checked is for toggle lists (which calendars a widget shows)
@@ -39,7 +40,8 @@ class ButtonView(context: Context, private val theme: ResolvedTheme, label: Stri
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        val wanted = (text.width(label, theme.type.button) + theme.spacing.m * 2).toInt()
+        // rounded up, a layout exactly as wide as its text can still wrap the last letter
+        val wanted = ceil(text.width(label, theme.type.button) + theme.spacing.m * 2).toInt() + 1
         val w = when (MeasureSpec.getMode(widthMeasureSpec)) {
             MeasureSpec.EXACTLY -> MeasureSpec.getSize(widthMeasureSpec)
             MeasureSpec.AT_MOST -> minOf(wanted, MeasureSpec.getSize(widthMeasureSpec))
