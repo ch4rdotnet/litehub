@@ -9,7 +9,12 @@ data class Sources(
     val version: Int,
     val calendars: List<CalendarSource> = emptyList(),
     val feeds: List<FeedSource> = emptyList(),
+    // where open-meteo forecasts for, only used for weather widgets without a ha entity
+    val location: Location? = null,
 )
+
+@Serializable
+data class Location(val latitude: Double, val longitude: Double)
 
 // exactly one of url (https, webcal or file) or entity (a ha calendar.* entity).
 // color falls back to the theme palette by position

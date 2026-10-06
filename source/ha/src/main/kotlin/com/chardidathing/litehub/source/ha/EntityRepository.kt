@@ -4,6 +4,13 @@ import android.database.sqlite.SQLiteException
 import com.chardidathing.litehub.core.model.Entity
 import com.chardidathing.litehub.core.model.EntityChoice
 import com.chardidathing.litehub.core.model.EntitySnapshot
+import com.chardidathing.litehub.core.model.TodoItem
+import com.chardidathing.litehub.core.model.TodoSnapshot
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.put
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -103,6 +110,77 @@ class EntityRepository(
 
     fun canToggle(id: String) = id.substringBefore('.') in TOGGLE_DOMAINS
 
+    private val todos = HashMap<String, MutableStateFlow<TodoSnapshot>>()
+    private val todoItems = HashMap<String, List<TodoItem>>()
+    private val todoErrors = HashMap<String, String>()
+
+    // a todo list's items, live. subscribing costs ha a little, release it when it's off screen
+    fun todo(entity: String): StateFlow<TodoSnapshot> {
+        val flow = synchronized(todos) { todos.getOrPut(entity) { MutableStateFlow(TodoSnapshot.Loading) } }
+        scope.launch {
+            publishTodo(entity)
+            client?.subscribe("todo:$entity", "todo/item/subscribe", buildJsonObject { put("entity_id", entity) }) { event ->
+                val items = (event["items"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }.mapNotNull { i ->
+                    val uid = i.str("uid") ?: return@mapNotNull null
+                    TodoItem(uid, i.str("summary").orEmpty(), i.str("status") == "completed")
+                }
+                todoItems[entity] = items
+                todoErrors.remove(entity)
+                publishTodo(entity)
+            }
+        }
+        return flow
+    }
+
+    fun releaseTodo(entity: String) {
+        scope.launch { client?.unsubscribe("todo:$entity") }
+    }
+
+    // ticks straight away, ha's next event confirms it or the error puts it back
+    suspend fun todoSetDone(entity: String, uid: String, done: Boolean): Result<Unit> = withContext(confined) {
+        val before = todoItems[entity].orEmpty()
+        todoItems[entity] = before.map { if (it.uid == uid) it.copy(done = done) else it }
+        publishTodo(entity)
+        val data = buildJsonObject {
+            put("item", uid)
+            put("status", if (done) "completed" else "needs_action")
+        }
+        val result = client?.callService("todo", "update_item", entity, data)?.map { } ?: Result.failure(IOException(statusReason()))
+        result.onFailure {
+            todoItems[entity] = before
+            todoErrors[entity] = it.message ?: "home assistant refused"
+            publishTodo(entity)
+        }
+        result
+    }
+
+    suspend fun todoAdd(entity: String, text: String): Result<Unit> = withContext(confined) {
+        val result = client?.callService("todo", "add_item", entity, buildJsonObject { put("item", text) })?.map { }
+            ?: Result.failure(IOException(statusReason()))
+        result.onFailure {
+            todoErrors[entity] = it.message ?: "home assistant refused"
+            publishTodo(entity)
+        }
+        result
+    }
+
+    private fun publishTodo(entity: String) {
+        val flow = synchronized(todos) { todos[entity] } ?: return
+        val items = todoItems[entity]
+        val s = status
+        flow.value = when {
+            items != null -> TodoSnapshot.Ready(
+                items,
+                stale = (s as? HaClient.Status.Failed)?.reason ?: if (s is HaClient.Status.Connecting) CONNECTING else null,
+                error = todoErrors[entity],
+            )
+            s is HaClient.Status.Failed -> TodoSnapshot.Failed(s.reason)
+            else -> TodoSnapshot.Loading
+        }
+    }
+
+    private fun JsonObject.str(key: String) = (this[key] as? JsonPrimitive)?.contentOrNull
+
     // every entity ha knows, named and grouped by area, for the editor's picker
     suspend fun catalogue(): Result<List<EntityChoice>> = withContext(confined) {
         val c = client ?: return@withContext Result.failure(IOException(statusReason()))
@@ -167,6 +245,7 @@ class EntityRepository(
             this@EntityRepository.status = status
             if (status !is HaClient.Status.Connected) fresh.clear()
             flows.keys.forEach(::publish)
+            synchronized(todos) { todos.keys.toList() }.forEach(::publishTodo)
         }
 
         override fun onEntities(event: HaClient.EntityEvent) {

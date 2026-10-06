@@ -177,6 +177,21 @@ class HaClientTest {
     }
 
     @Test
+    fun `extra subscriptions deliver and come back after a restart`() {
+        ha.accept()
+        ha.accept()
+        val client = client()
+        val got = LinkedBlockingQueue<kotlinx.serialization.json.JsonObject>()
+        runBlocking(confined) {
+            client.subscribe("todo:shopping", "todo/item/subscribe", buildJsonObject { put("entity_id", "todo.shopping") }) { got += it }
+        }
+        client.start()
+        assertTrue(got.poll(5, TimeUnit.SECONDS)!!.toString().contains("milk"))
+        ha.restart()
+        assertTrue(got.poll(5, TimeUnit.SECONDS)!!.toString().contains("milk"))
+    }
+
+    @Test
     fun `a deleted device shows up as a rejected push channel`() {
         ha.accept()
         val client = client()

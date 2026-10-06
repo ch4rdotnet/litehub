@@ -82,6 +82,13 @@ class HaClient(
     private var subscription: Subscription? = null
     private var pushWebhook: String? = null
     private var pushSubscription: Int? = null
+
+    // other long lived subscriptions (todo lists), by key. fields build the subscribe message,
+    // each event body goes to its handler. all of them come back after a reconnect
+    private class Extra(val type: String, val fields: JsonObject, val onEvent: (JsonObject) -> Unit) {
+        var id: Int? = null
+    }
+    private val extras = HashMap<String, Extra>()
     private var nextId = 1
     private val pending = HashMap<Int, CompletableDeferred<JsonObject>>()
 
@@ -201,9 +208,11 @@ class HaClient(
             subscription = null
             onConnected()
             pushSubscription = null
+            extras.values.forEach { it.id = null }
             listener.onStatus(Status.Connected)
             resubscribe()
             subscribePush()
+            extras.values.forEach(::send)
             for (text in incoming) handle(parse(text))
         } finally {
             ws.cancel()
@@ -220,6 +229,30 @@ class HaClient(
         if (webhookId == pushWebhook) return
         pushWebhook = webhookId
         if (socket != null) subscribePush()
+    }
+
+    fun subscribe(key: String, type: String, fields: JsonObject, onEvent: (JsonObject) -> Unit) {
+        unsubscribe(key)
+        val extra = Extra(type, fields, onEvent)
+        extras[key] = extra
+        if (socket != null) send(extra)
+    }
+
+    fun unsubscribe(key: String) {
+        val old = extras.remove(key) ?: return
+        val id = old.id ?: return
+        socket?.send(buildJsonObject {
+            put("id", nextId++)
+            put("type", "unsubscribe_events")
+            put("subscription", id)
+        }.toString())
+    }
+
+    private fun send(extra: Extra) {
+        val ws = socket ?: return
+        val id = nextId++
+        extra.id = id
+        ws.send(JsonObject(extra.fields + mapOf("id" to JsonPrimitive(id), "type" to JsonPrimitive(extra.type))).toString())
     }
 
     private fun subscribePush() {
@@ -249,6 +282,10 @@ class HaClient(
             "event" -> {
                 if (id == pushSubscription) {
                     (message["event"] as? JsonObject)?.let(listener::onPush)
+                    return
+                }
+                extras.values.firstOrNull { it.id == id }?.let { extra ->
+                    (message["event"] as? JsonObject)?.let(extra.onEvent)
                     return
                 }
                 val sub = subscription?.takeIf { it.id == id } ?: return

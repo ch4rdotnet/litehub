@@ -89,6 +89,10 @@ class FakeHa(private val token: String) : AutoCloseable {
                     webSocket.send(event(id, """{"a":{$added}}"""))
                 }
                 "unsubscribe_events" -> webSocket.send(result(id!!, success = true))
+                "todo/item/subscribe" -> {
+                    webSocket.send(result(id!!, success = true))
+                    webSocket.send(event(id, """{"items":[{"uid":"1","summary":"milk","status":"needs_action"}]}"""))
+                }
                 "mobile_app/push_notification_channel" -> {
                     val known = msg["webhook_id"]?.jsonPrimitive?.contentOrNull != "deleted"
                     webSocket.send(result(id!!, success = known))
