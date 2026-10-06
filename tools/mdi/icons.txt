@@ -135,3 +135,20 @@ window-closed
 window-open
 car
 car-electric
+# weather conditions, named after ha's condition states
+weather-fog
+weather-rainy
+weather-snowy
+weather-snowy-rainy
+weather-lightning
+weather-lightning-rainy
+weather-hail
+weather-windy
+weather-windy-variant
+weather-night-partly-cloudy
+alert-circle-outline
+# lists
+checkbox-blank-circle-outline
+checkbox-marked-circle-outline
+plus
+keyboard
