@@ -1,14 +1,19 @@
 package com.chardidathing.litehub.core.config
 
+import com.chardidathing.litehub.core.model.CalendarSource
 import com.chardidathing.litehub.core.model.Choice
 import com.chardidathing.litehub.core.model.DeviceSettings
+import com.chardidathing.litehub.core.model.FeedSource
 import com.chardidathing.litehub.core.model.FieldKind
+import com.chardidathing.litehub.core.model.Hex
 import com.chardidathing.litehub.core.model.ImmichSettings
+import com.chardidathing.litehub.core.model.Location
 import com.chardidathing.litehub.core.model.NightMode
 import com.chardidathing.litehub.core.model.NightSettings
 import com.chardidathing.litehub.core.model.PhotoSettings
 import com.chardidathing.litehub.core.model.SchemaField
 import com.chardidathing.litehub.core.model.SettingsSection
+import com.chardidathing.litehub.core.model.Sources
 import com.chardidathing.litehub.core.model.shownWith
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -17,14 +22,30 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
+import java.util.Locale
 
-// the hub's own settings as one flat form, key to value. the settings screen on the device and
-// the web ui both draw these sections and hand edits back through apply(), so they can't drift.
-// settings.json keeps its nested shape, this is only how it's edited
-object DeviceForm {
+// everything the settings screens edit, across settings.json, sources.json and ha.json. the ha
+// token never comes in here, only whether one is set
+data class HubSettings(val device: DeviceSettings, val sources: Sources, val haUrl: String?, val haTokenSet: Boolean)
+
+// what a save hands back. ha is null when the connection wasn't touched, a null token keeps the old one
+data class SavedSettings(val device: DeviceSettings, val sources: Sources, val ha: HaEdit?)
+
+data class HaEdit(val url: String, val token: String?)
+
+// the hub's settings as one form, key to value (a list section's value is an array of item
+// objects). the settings screen on the device and the web ui both draw these sections and hand
+// edits back through apply(), so they can't drift. the files keep their own shapes
+object SettingsForm {
 
     private const val PHOTOS = "photos.source"
     private const val NIGHT = "night.enabled"
+    private const val LOCATION = "location.set"
+    const val CALENDARS = "calendars"
+    const val FEEDS = "feeds"
+
+    // fills location in from ha's own home, the device and the web ask ha for it
+    const val HA_HOME = "ha-home"
 
     val sections: List<SettingsSection> = listOf(
         SettingsSection(
@@ -92,9 +113,44 @@ object DeviceForm {
             "ha",
             "home assistant",
             listOf(
+                text("ha.url", "url (http://homeassistant.local:8123)"),
+                SchemaField("ha.token", "long lived token", FieldKind.SECRET),
                 number("reporting.heartbeatMinutes", "send sensors at least every (minutes)", 1, 120),
                 number("reporting.interactionSeconds", "report touches at most every (seconds)", 5, 3600),
             ),
+        ),
+        SettingsSection(
+            CALENDARS,
+            "calendars",
+            itemName = "calendar",
+            items = listOf(
+                SchemaField("name", "name", FieldKind.TEXT, required = true),
+                SchemaField("source", "from", FieldKind.CHOICE, options = listOf(Choice("url", "a link (ics or webcal)"), Choice("entity", "a home assistant calendar"))),
+                SchemaField("url", "link", FieldKind.TEXT, required = true, showIf = mapOf("source" to "url")),
+                SchemaField("entity", "calendar", FieldKind.ENTITY, required = true, domains = listOf("calendar"), showIf = mapOf("source" to "entity")),
+                SchemaField("color", "colour", FieldKind.COLOR),
+                number("refreshMinutes", "check every (minutes)", 1, 1440),
+            ),
+        ),
+        SettingsSection(
+            FEEDS,
+            "feeds",
+            itemName = "feed",
+            items = listOf(
+                SchemaField("name", "name", FieldKind.TEXT, required = true),
+                SchemaField("url", "link (rss or atom)", FieldKind.TEXT, required = true),
+                number("refreshMinutes", "check every (minutes)", 1, 1440),
+            ),
+        ),
+        SettingsSection(
+            "location",
+            "location",
+            listOf(
+                toggle(LOCATION, "a location for weather without a ha entity"),
+                number("location.latitude", "latitude", -90, 90, mapOf(LOCATION to "true")),
+                number("location.longitude", "longitude", -180, 180, mapOf(LOCATION to "true")),
+            ),
+            actions = listOf(Choice(HA_HOME, "use home assistant's home")),
         ),
         SettingsSection(
             "web",
@@ -116,14 +172,17 @@ object DeviceForm {
     )
 
     private val fields = sections.flatMap { it.fields }.associateBy { it.key }
+    private val lists = sections.filter { it.items != null }.associateBy { it.id }
 
     // what a night window starts as before one's been set
     private val NEW_NIGHT = NightSettings("22:00", "07:00")
 
-    fun values(s: DeviceSettings): JsonObject {
+    fun values(h: HubSettings): JsonObject {
+        val s = h.device
         val saver = s.screensaver
         val photos = saver.photos
         val night = saver.night ?: NEW_NIGHT
+        val location = h.sources.location
         return JsonObject(
             mapOf(
                 "screensaver.enabled" to JsonPrimitive(saver.enabled),
@@ -158,8 +217,15 @@ object DeviceForm {
                 "notifications.bannerSeconds" to JsonPrimitive(s.notifications.bannerSeconds),
                 "notifications.maxBanners" to JsonPrimitive(s.notifications.maxBanners),
                 "notifications.keep" to JsonPrimitive(s.notifications.keep),
+                "ha.url" to JsonPrimitive(h.haUrl.orEmpty()),
+                "ha.token" to JsonPrimitive(""),
                 "reporting.heartbeatMinutes" to JsonPrimitive(s.reporting.heartbeatMinutes),
                 "reporting.interactionSeconds" to JsonPrimitive(s.reporting.interactionSeconds),
+                CALENDARS to JsonArray(h.sources.calendars.map(::calendarItem)),
+                FEEDS to JsonArray(h.sources.feeds.map(::feedItem)),
+                LOCATION to JsonPrimitive(location != null),
+                "location.latitude" to JsonPrimitive(location?.latitude ?: 0.0),
+                "location.longitude" to JsonPrimitive(location?.longitude ?: 0.0),
                 "web.editor" to JsonPrimitive(s.web.editor),
                 "web.status" to JsonPrimitive(s.web.status),
                 "web.port" to JsonPrimitive(s.web.port),
@@ -169,24 +235,67 @@ object DeviceForm {
         )
     }
 
+    private fun calendarItem(c: CalendarSource) = JsonObject(
+        mapOf(
+            "id" to JsonPrimitive(c.id),
+            "name" to JsonPrimitive(c.name),
+            "source" to JsonPrimitive(if (c.entity != null) "entity" else "url"),
+            "url" to JsonPrimitive(c.url.orEmpty()),
+            "entity" to JsonPrimitive(c.entity.orEmpty()),
+            "color" to JsonPrimitive(c.color?.let(Hex::of).orEmpty()),
+            "refreshMinutes" to JsonPrimitive(c.refreshMinutes),
+        ),
+    )
+
+    private fun feedItem(f: FeedSource) = JsonObject(
+        mapOf(
+            "id" to JsonPrimitive(f.id),
+            "name" to JsonPrimitive(f.name),
+            "url" to JsonPrimitive(f.url),
+            "refreshMinutes" to JsonPrimitive(f.refreshMinutes),
+        ),
+    )
+
+    // what a new list item starts as, the same defaults a hand written one gets
+    fun newItem(section: String): JsonObject = when (section) {
+        CALENDARS -> calendarItem(CalendarSource("", "")).let { JsonObject(it - "id") }
+        else -> feedItem(FeedSource("", "", "")).let { JsonObject(it - "id") }
+    }
+
     // edits laid over what's there now. keys left out keep their value, a blank secret keeps the
-    // old one. throws ConfigException naming the field when something's off
-    fun apply(s: DeviceSettings, edits: JsonObject): DeviceSettings {
-        val v = values(s).toMutableMap()
+    // old one, a list's value replaces the whole list. throws ConfigException naming the field
+    fun apply(h: HubSettings, edits: JsonObject): SavedSettings {
+        val v = values(h).toMutableMap()
         for ((key, value) in edits) {
-            val field = fields[key] ?: throw ConfigException("there's no setting called $key")
-            if (field.kind == FieldKind.SECRET && (value as? JsonPrimitive)?.contentOrNull.isNullOrBlank()) continue
+            val field = fields[key]
+            if (field == null && key !in lists) throw ConfigException("there's no setting called $key")
+            if (field?.kind == FieldKind.SECRET && (value as? JsonPrimitive)?.contentOrNull.isNullOrBlank()) continue
             v[key] = value
         }
-        checkFields(v)
-        val next = build(s, Values(v))
-        check(next)
-        return next
+        checkFields(fields.values, v)
+        for ((id, section) in lists) {
+            val items = v[id] as? JsonArray ?: throw ConfigException("${section.name} isn't a list")
+            for (item in items) {
+                val o = item as? JsonObject ?: throw ConfigException("${section.name} has something that isn't a ${section.itemName}")
+                val name = (o["name"] as? JsonPrimitive)?.contentOrNull?.ifBlank { null } ?: section.itemName.orEmpty()
+                try {
+                    checkFields(section.items.orEmpty(), o)
+                } catch (e: ConfigException) {
+                    throw ConfigException("$name, ${e.message}")
+                }
+            }
+        }
+        val values = Values(v)
+        val device = build(h.device, values)
+        check(device)
+        val sources = sources(h.sources, values)
+        SourcesCodec.check(sources)
+        return SavedSettings(device, sources, ha(h, values))
     }
 
     // the same checks settings.json gets when it's read from disk
     fun check(s: DeviceSettings) {
-        checkFields(values(s))
+        checkFields(fields.values, values(HubSettings(s, Sources(SourcesCodec.VERSION), null, false)))
         s.screensaver.photos?.let { p ->
             if (listOfNotNull(p.folder, p.immich, p.haMedia).size != 1) throw ConfigException("photos needs exactly one of folder, immich or haMedia")
         }
@@ -194,16 +303,19 @@ object DeviceForm {
     }
 
     // hidden fields aren't checked, a night window that's off can hold anything
-    private fun checkFields(v: Map<String, JsonElement>) {
-        for (field in fields.values) {
+    private fun checkFields(list: Collection<SchemaField>, v: Map<String, JsonElement>) {
+        for (field in list) {
             if (!field.shownWith(v)) continue
             val value = v[field.key] as? JsonPrimitive
+            if (field.required && value?.contentOrNull.isNullOrBlank()) throw ConfigException("${field.label} is needed")
             val ok = when (field.kind) {
                 FieldKind.TOGGLE -> value?.booleanOrNull != null
                 FieldKind.NUMBER -> value?.doubleOrNull?.let { n -> (field.min == null || n >= field.min!!) && (field.max == null || n <= field.max!!) } == true
                 FieldKind.CHOICE -> field.options.any { it.value == value?.contentOrNull }
                 FieldKind.TIME -> value?.contentOrNull?.let(SettingsCodec::time) != null
                 FieldKind.ENTITIES -> (v[field.key] as? JsonArray)?.all { (it as? JsonPrimitive)?.isString == true } == true
+                // a cleared box drops its key, that's automatic too
+                FieldKind.COLOR -> value?.contentOrNull.orEmpty().let { it.isBlank() || Hex.parse(it) != null }
                 else -> value?.isString == true
             }
             if (!ok) throw ConfigException(problem(field))
@@ -215,6 +327,7 @@ object DeviceForm {
         FieldKind.TIME -> "${field.label} is a time like 22:00"
         FieldKind.CHOICE -> "${field.label} is one of ${field.options.joinToString { it.value }}"
         FieldKind.TOGGLE -> "${field.label} is on or off"
+        FieldKind.COLOR -> "${field.label} is a colour like #6200ee, or blank"
         else -> "${field.label} isn't valid"
     }
 
@@ -275,13 +388,61 @@ object DeviceForm {
         )
     }
 
+    // ids are kept once made, dashboards point at them. a new item gets one from its name
+    private fun sources(old: Sources, v: Values): Sources {
+        // existing ids are reserved first so a new item never takes one that's in use
+        val taken = (v.items(CALENDARS) + v.items(FEEDS)).map { it.text("id") }.filter { it.isNotEmpty() }.toMutableSet()
+        fun id(item: Values.Item): String {
+            item.text("id").ifEmpty { null }?.let { return it }
+            val wanted = slug(item.text("name"))
+            var candidate = wanted
+            var n = 2
+            while (candidate in taken) candidate = "$wanted-${n++}"
+            taken += candidate
+            return candidate
+        }
+        val calendars = v.items(CALENDARS).map { c ->
+            val byUrl = c.text("source") != "entity"
+            CalendarSource(
+                id = id(c),
+                name = c.text("name"),
+                url = if (byUrl) c.text("url") else null,
+                entity = if (byUrl) null else c.text("entity"),
+                color = Hex.parse(c.text("color")),
+                refreshMinutes = c.int("refreshMinutes"),
+            )
+        }
+        val feeds = v.items(FEEDS).map { f -> FeedSource(id(f), f.text("name"), f.text("url"), f.int("refreshMinutes")) }
+        val location = if (!v.bool(LOCATION)) null else Location(v.double("location.latitude"), v.double("location.longitude"))
+        return old.copy(calendars = calendars, feeds = feeds, location = location)
+    }
+
+    private fun slug(name: String): String =
+        name.lowercase(Locale.ROOT).replace(Regex("[^a-z0-9]+"), "-").trim('-').ifEmpty { "source" }
+
+    private fun ha(h: HubSettings, v: Values): HaEdit? {
+        val url = v.text("ha.url")
+        val token = v.text("ha.token").ifEmpty { null }
+        if (url == h.haUrl.orEmpty() && token == null) return null
+        if (url.isEmpty()) throw ConfigException("home assistant url is needed")
+        if (token == null && !h.haTokenSet) throw ConfigException("a long lived token is needed the first time")
+        return HaEdit(url, token)
+    }
+
     private class Values(private val v: Map<String, JsonElement>) {
         fun text(key: String) = (v[key] as? JsonPrimitive)?.contentOrNull.orEmpty().trim()
         fun needed(key: String) = text(key).ifEmpty { throw ConfigException("${fields.getValue(key).label} is needed") }
         fun bool(key: String) = (v[key] as? JsonPrimitive)?.booleanOrNull ?: false
         fun int(key: String) = (v[key] as? JsonPrimitive)?.doubleOrNull?.toInt() ?: 0
-        fun float(key: String) = (v[key] as? JsonPrimitive)?.doubleOrNull?.toFloat() ?: 0f
+        fun float(key: String) = double(key).toFloat()
+        fun double(key: String) = (v[key] as? JsonPrimitive)?.doubleOrNull ?: 0.0
         fun list(key: String) = (v[key] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.trim()?.ifEmpty { null } }.orEmpty()
+        fun items(key: String) = (v[key] as? JsonArray)?.mapNotNull { (it as? JsonObject)?.let(::Item) }.orEmpty()
+
+        class Item(private val o: JsonObject) {
+            fun text(key: String) = (o[key] as? JsonPrimitive)?.contentOrNull.orEmpty().trim()
+            fun int(key: String) = (o[key] as? JsonPrimitive)?.doubleOrNull?.toInt() ?: 0
+        }
     }
 
     private fun toggle(key: String, label: String) = SchemaField(key, label, FieldKind.TOGGLE)
@@ -290,4 +451,5 @@ object DeviceForm {
 
     private fun number(key: String, label: String, min: Number, max: Number, showIf: Map<String, String> = emptyMap()) =
         SchemaField(key, label, FieldKind.NUMBER, min = min.toDouble(), max = max.toDouble(), showIf = showIf)
+
 }

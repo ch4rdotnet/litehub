@@ -22,7 +22,7 @@ object SettingsCodec {
         if (settings.version > VERSION) {
             throw ConfigException("settings.json version ${settings.version} is newer than this app supports ($VERSION)")
         }
-        DeviceForm.check(settings)
+        SettingsForm.check(settings)
         return settings
     }
 

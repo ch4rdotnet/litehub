@@ -18,6 +18,12 @@ object SourcesCodec {
         if (sources.version > VERSION) {
             throw ConfigException("sources.json version ${sources.version} is newer than this app supports ($VERSION)")
         }
+        check(sources)
+        return sources
+    }
+
+    // what every sources.json has to hold to, however it was written
+    fun check(sources: Sources) {
         val ids = sources.calendars.map { it.id } + sources.feeds.map { it.id }
         ids.groupBy { it }.filter { it.value.size > 1 }.keys.firstOrNull()?.let {
             throw ConfigException("two sources share the id \"$it\"")
@@ -31,6 +37,7 @@ object SourcesCodec {
         for (f in sources.feeds) {
             if (f.refreshMinutes < 1) throw ConfigException("feed \"${f.id}\" refreshes too often")
         }
-        return sources
     }
+
+    fun encode(sources: Sources): String = ConfigCodec.json.encodeToString(Sources.serializer(), sources)
 }
