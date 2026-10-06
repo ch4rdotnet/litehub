@@ -79,6 +79,8 @@ class FieldForm(
             FieldKind.SECRET -> InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
             else -> InputType.TYPE_CLASS_TEXT
         }
+        // android swaps password boxes to monospace, put the theme's font back
+        typeface = theme.type.body1.typeface
         hint = when (field.kind) {
             FieldKind.TIME -> "22:00"
             FieldKind.SECRET -> "leave blank to keep it"
