@@ -44,6 +44,9 @@ data class ScreensaverSettings(
     val idleMinutes: Int = 10,
     val photos: PhotoSettings? = null,
     val photoSeconds: Int = 30,
+    // the backlight turned down while the screensaver shows, to this percent of full
+    val dimWhileShowing: Boolean = false,
+    val showingDimPercent: Int = 30,
     // the photo list is read again this often so new photos turn up
     val photoRefreshMinutes: Int = 60,
     val night: NightSettings? = null,

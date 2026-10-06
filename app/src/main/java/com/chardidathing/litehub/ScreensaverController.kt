@@ -67,6 +67,8 @@ class ScreensaverController(private val app: LitehubApp, private val scope: Coro
     fun reload() {
         watchEntities()
         evaluate()
+        // the mode may be the same but what it looks like (the dim level) may not
+        apply(_mode.value, force = true)
     }
 
     fun interacted() {
@@ -132,14 +134,18 @@ class ScreensaverController(private val app: LitehubApp, private val scope: Coro
         val d = display
         val night = app.settings.screensaver.night
         if (m != Mode.SCREENSAVER) d?.hideScreensaver()
-        if (m != Mode.DIMMED) d?.dim(null)
+        if (m != Mode.DIMMED && m != Mode.SCREENSAVER) d?.dim(null)
         if (m != Mode.BLANK) {
             d?.overlayBlank(false)
             if (adminLocked) turnPanelOn()
         }
         when (m) {
             Mode.AWAKE -> Unit
-            Mode.SCREENSAVER -> d?.showScreensaver()
+            Mode.SCREENSAVER -> {
+                d?.showScreensaver()
+                val s = app.settings.screensaver
+                d?.dim(if (s.dimWhileShowing) s.showingDimPercent else null)
+            }
             Mode.DIMMED -> d?.dim(night?.dimPercent ?: DEFAULT_DIM)
             Mode.BLANK -> if (ScreenAdmin.active(app)) {
                 // a real panel off, android takes the screen away from us here
