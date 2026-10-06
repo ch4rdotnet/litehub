@@ -13,7 +13,6 @@ import com.chardidathing.litehub.ui.widgets.Legend
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.intOrNull
 
 // one widget's settings, a form built from its schema. hands back the new config json
 @SuppressLint("ViewConstructor")
@@ -64,10 +63,10 @@ class SettingsSheet(
             problem.text = "${missing.label} is needed"
             return
         }
-        // a number field left at its default isn't written, so the default can change later
+        // a field left at its default isn't written, so the default can change later
         val cleaned = values.filter { (k, v) ->
             val f = schema.fields.firstOrNull { it.key == k }
-            f == null || f.default == null || (v as? JsonPrimitive)?.intOrNull != (f.default as? JsonPrimitive)?.intOrNull
+            f == null || f.default == null || v != f.default
         }
         host.save(JsonObject(cleaned))
     }

@@ -104,7 +104,7 @@ class FieldForm(
 
     private fun toggle(field: SchemaField): ButtonView {
         lateinit var b: ButtonView
-        fun on() = (values[field.key] as? JsonPrimitive)?.booleanOrNull == true
+        fun on() = ((values[field.key] ?: field.default) as? JsonPrimitive)?.booleanOrNull == true
         b = ButtonView(context, theme, if (on()) "on" else "off") {
             values[field.key] = JsonPrimitive(!on())
             b.label = if (on()) "on" else "off"
