@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "activeDashboard": "kitchen",
+  "dashboards": [
+    {
+      "id": "kitchen",
+      "name": "kitchen",
+      "theme": { "mode": "system", "light": "base", "dark": "night" },
+      "pages": [
+        {
+          "id": "main",
+          "columns": 4,
+          "rows": 3,
+          "widgets": [
+            { "x": 0, "y": 0, "w": 2, "h": 1, "type": "placeholder", "config": { "title": "clock" } },
+            { "x": 2, "y": 0, "w": 2, "h": 3, "type": "placeholder" }
+          ]
+        }
+      ]
+    }
+  ],
+  "themes": [
+    { "id": "night", "extends": "base", "colors": { "background": "#000000" } }
+  ]
+}
