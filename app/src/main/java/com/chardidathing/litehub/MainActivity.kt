@@ -10,6 +10,8 @@ import android.view.View
 import android.view.WindowManager
 import com.chardidathing.litehub.core.config.ConfigCodec
 import com.chardidathing.litehub.ui.components.NoticeView
+import com.chardidathing.litehub.ui.editor.TextPrompt
+import android.view.inputmethod.InputMethodManager
 import java.io.File
 import android.os.Bundle
 import android.widget.FrameLayout
@@ -80,6 +82,7 @@ class MainActivity : Activity() {
     @Deprecated("still the only back hook on api 28")
     override fun onBackPressed() {
         when {
+            prompt != null -> closePrompt()
             editor.isOpen -> editor.back()
             admin.isOpen -> admin.close()
         }
@@ -107,6 +110,7 @@ class MainActivity : Activity() {
         companion.stop()
         app.calendars.stop()
         app.feeds.stop()
+        app.weather.stop()
         super.onStop()
     }
 
@@ -209,6 +213,29 @@ class MainActivity : Activity() {
     private fun startSources() {
         app.calendars.start()
         app.feeds.start()
+        app.weather.start()
+    }
+
+    private var prompt: TextPrompt? = null
+
+    private fun askText(title: String, onText: (String) -> Unit) {
+        val theme = this.theme ?: return
+        closePrompt()
+        val view = TextPrompt(this, theme, title, onDone = { text ->
+            closePrompt()
+            onText(text)
+        }, onCancel = ::closePrompt)
+        prompt = view
+        root.addView(view)
+        view.input.requestFocus()
+        getSystemService(InputMethodManager::class.java).showSoftInput(view.input, InputMethodManager.SHOW_IMPLICIT)
+    }
+
+    private fun closePrompt() {
+        val view = prompt ?: return
+        getSystemService(InputMethodManager::class.java).hideSoftInputFromWindow(view.windowToken, 0)
+        root.removeView(view)
+        prompt = null
     }
 
     private fun edit() {
@@ -276,7 +303,7 @@ class MainActivity : Activity() {
                     widgets += made
                     view
                 }
-                val b = DashboardBinder(app.ha, app.calendars, app.feeds, ticker.now, widgets, scope)
+                val b = DashboardBinder(app.ha, app.calendars, app.feeds, app.weather, ::askText, ticker.now, widgets, scope)
                 binder = b
                 PagerView(this, theme, pages).also {
                     pager = it

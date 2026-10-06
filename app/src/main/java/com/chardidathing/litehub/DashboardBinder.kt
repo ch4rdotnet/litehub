@@ -8,6 +8,9 @@ import com.chardidathing.litehub.ui.widgets.CalendarWidget
 import com.chardidathing.litehub.ui.widgets.EntityWidget
 import com.chardidathing.litehub.ui.widgets.FeedWidget
 import com.chardidathing.litehub.ui.widgets.Moment
+import com.chardidathing.litehub.ui.widgets.TodoWidget
+import com.chardidathing.litehub.ui.widgets.WeatherWidget
+import com.chardidathing.litehub.source.weather.WeatherRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.StateFlow
@@ -21,6 +24,9 @@ class DashboardBinder(
     private val ha: EntityRepository,
     private val calendars: CalendarRepository,
     private val feeds: FeedRepository,
+    private val weather: WeatherRepository,
+    // a list's "type" chip wants the keyboard, the activity owns that
+    private val askText: (title: String, onText: (String) -> Unit) -> Unit,
     private val now: StateFlow<Moment>,
     private val pages: List<List<WidgetView>>,
     private val scope: CoroutineScope,
@@ -34,6 +40,12 @@ class DashboardBinder(
             // failures come back through the snapshot, so there's nothing to handle here
             if (ha.canToggle(id)) widget.onTap = { scope.launch { ha.toggle(id) } }
         }
+        for (list in pages.flatten().filterIsInstance<TodoWidget>()) {
+            val id = list.config.entity
+            list.onToggle = { uid, done -> scope.launch { ha.todoSetDone(id, uid, done) } }
+            list.onAdd = { text -> scope.launch { ha.todoAdd(id, text) } }
+            list.onType = { askText("add to ${list.config.title ?: "the list"}") { text -> scope.launch { ha.todoAdd(id, text) } } }
+        }
     }
 
     fun show(page: Int) {
@@ -44,8 +56,10 @@ class DashboardBinder(
             val widgets = pages.getOrNull(page) ?: continue
             jobs[page] = widgets.mapNotNull(::bind)
         }
-        val entities = pages.getOrNull(page).orEmpty().filterIsInstance<EntityWidget>()
-        ha.setVisible(entities.mapTo(HashSet()) { it.config.entity })
+        val onScreen = pages.getOrNull(page).orEmpty()
+        val entities = onScreen.filterIsInstance<EntityWidget>().map { it.config.entity } +
+            onScreen.filterIsInstance<WeatherWidget>().mapNotNull { it.config.entity }
+        ha.setVisible(entities.toSet())
     }
 
     // nothing on screen costs anything, ha stops sending
@@ -59,6 +73,16 @@ class DashboardBinder(
         is EntityWidget -> scope.launch { ha.snapshot(widget.config.entity).collect(widget::show) }
         is CalendarWidget -> scope.launch { combine(calendars.snapshot, now, ::Pair).collect { (s, m) -> widget.show(s, m) } }
         is FeedWidget -> scope.launch { combine(feeds.snapshot, now, ::Pair).collect { (s, m) -> widget.show(s, m) } }
+        is WeatherWidget -> scope.launch {
+            combine(weather.watch(weather.key(widget.config.entity)), now, ::Pair).collect { (s, m) -> widget.show(s, m) }
+        }
+        is TodoWidget -> scope.launch {
+            try {
+                ha.todo(widget.config.entity).collect(widget::show)
+            } finally {
+                ha.releaseTodo(widget.config.entity)
+            }
+        }
         else -> null
     }
 }

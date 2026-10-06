@@ -39,6 +39,7 @@ dependencies {
     implementation(project(":source:ha"))
     implementation(project(":source:calendar"))
     implementation(project(":source:feed"))
+    implementation(project(":source:weather"))
     implementation(project(":ui:widgets"))
     implementation(project(":ui:editor"))
     implementation(libs.kotlinx.coroutines.android)

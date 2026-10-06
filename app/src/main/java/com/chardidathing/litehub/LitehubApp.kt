@@ -14,6 +14,7 @@ import com.chardidathing.litehub.source.feed.FeedStore
 import com.chardidathing.litehub.source.ha.EntityCache
 import com.chardidathing.litehub.source.ha.EntityRepository
 import com.chardidathing.litehub.source.ha.HaCredentials
+import com.chardidathing.litehub.source.weather.WeatherRepository
 import com.chardidathing.litehub.ui.components.Icons
 import com.chardidathing.litehub.ui.tokens.Fonts
 import okhttp3.Cache
@@ -36,6 +37,7 @@ class LitehubApp : Application() {
     private var _sources: Result<Sources>? = null
     private var _calendars: CalendarRepository? = null
     private var _feeds: FeedRepository? = null
+    private var _weather: WeatherRepository? = null
     private var _settings: DeviceSettings? = null
 
     override fun onCreate() {
@@ -62,6 +64,10 @@ class LitehubApp : Application() {
         @Synchronized get() = _feeds
             ?: FeedRepository(sources.getOrNull()?.feeds.orEmpty(), Fetcher(http), FeedStore(this)).also { _feeds = it }
 
+    val weather: WeatherRepository
+        @Synchronized get() = _weather
+            ?: WeatherRepository(this, ha, Fetcher(http), sources.getOrNull()?.location).also { _weather = it }
+
     // a broken settings.json falls back to defaults, the admin menu must always be reachable
     val settings: DeviceSettings
         @Synchronized get() = _settings ?: readSettings().also { _settings = it }
@@ -78,6 +84,8 @@ class LitehubApp : Application() {
         _ha?.close()
         _calendars?.close()
         _feeds?.close()
+        _weather?.close()
+        _weather = null
         _ha = null
         _calendars = null
         _feeds = null

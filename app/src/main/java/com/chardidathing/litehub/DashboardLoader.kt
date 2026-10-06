@@ -42,6 +42,8 @@ class DashboardLoader(private val app: LitehubApp) {
         if (entityIds.isNotEmpty()) app.ha.preload(entityIds)
         app.calendars.preload()
         app.feeds.preload()
+        val weather = dashboard.pages.flatMap { it.widgets }.filter(WidgetCatalog::isWeather)
+        app.weather.prepare(weather.mapTo(HashSet()) { app.weather.key(WidgetCatalog.weatherEntity(it)) })
         Screen.Ready(ResolvedTheme(theme, metrics, app.fonts, DeviceTier.isLow(app)), config, dashboard.pages, app.icons, legend(theme))
     } catch (e: ConfigException) {
         failed(e.message.orEmpty(), systemDark, metrics)
