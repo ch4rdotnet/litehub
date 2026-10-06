@@ -42,5 +42,6 @@ dependencies {
     implementation(project(":source:weather"))
     implementation(project(":ui:widgets"))
     implementation(project(":ui:editor"))
+    implementation(project(":webui"))
     implementation(libs.kotlinx.coroutines.android)
 }

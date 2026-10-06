@@ -75,13 +75,18 @@ class AdminFlow(
             add("reload" to onReload)
             if (companion.registration == null) add("add to home assistant" to ::register)
             else add("unregister" to ::forget)
+            val web = app.settings.web
+            add((if (web.editor) "web editor: on" else "web editor: off") to { toggleWeb { it.copy(editor = !it.editor) } })
+            add((if (web.status) "status page: on" else "status page: off") to { toggleWeb { it.copy(status = !it.status) } })
             add((if (hasPin) "change pin" else "set pin") to ::newPin)
             if (hasPin) add("remove pin" to ::removePin)
             add("home app settings" to { settings(Settings.ACTION_HOME_SETTINGS) })
             add("android settings" to { settings(Settings.ACTION_SETTINGS) })
             add("close" to ::close)
         }
-        show(MenuView(activity, t, "litehub", notice ?: "version ${BuildConfig.VERSION_NAME}", items.map { it.first }) { i ->
+        val web = app.settings.web
+        val address = if (web.editor || web.status) app.web.address()?.let { "  ·  open $it" }.orEmpty() else ""
+        show(MenuView(activity, t, "litehub", notice ?: "version ${BuildConfig.VERSION_NAME}$address", items.map { it.first }) { i ->
             items[i].second()
         })
     }
@@ -129,6 +134,16 @@ class AdminFlow(
     private fun forget() {
         scope.launch {
             companion.forget()
+            menu()
+        }
+    }
+
+    private fun toggleWeb(change: (com.chardidathing.litehub.core.model.WebSettings) -> com.chardidathing.litehub.core.model.WebSettings) {
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                app.saveSettings(app.settings.copy(web = change(app.settings.web)))
+                app.web.apply()
+            }
             menu()
         }
     }

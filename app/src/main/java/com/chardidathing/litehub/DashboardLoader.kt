@@ -37,6 +37,7 @@ class DashboardLoader(private val app: LitehubApp) {
         val config = ConfigCodec.decode(text)
         val dashboard = config.dashboards.first { it.id == config.activeDashboard }
         val theme = Themes(Presets.all, config.themes).select(dashboard.theme, systemDark)
+        app.currentTheme = theme
         // every page, so a swipe lands on cached state rather than "connecting"
         val entityIds = dashboard.pages.flatMap { it.widgets }.mapNotNull(WidgetCatalog::entityId)
         if (entityIds.isNotEmpty()) app.ha.preload(entityIds)

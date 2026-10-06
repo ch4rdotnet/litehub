@@ -10,7 +10,15 @@ data class DeviceSettings(
     val version: Int,
     val pin: String? = null,
     val companion: CompanionRegistration? = null,
+    val web: WebSettings = WebSettings(),
 )
+
+// the browser editor and the read only status page, both off until turned on from the menu.
+// the editor asks for the device pin when there is one
+@Serializable
+data class WebSettings(val editor: Boolean = false, val status: Boolean = false, val port: Int = DEFAULT_WEB_PORT)
+
+const val DEFAULT_WEB_PORT = 8080
 
 // name is what ha calls the device, notify.mobile_app_<name> sends to it
 @Serializable

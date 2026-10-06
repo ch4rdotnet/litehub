@@ -43,13 +43,25 @@ class LitehubApp : Application() {
     override fun onCreate() {
         super.onCreate()
         Watchdog.install(this)
+        AppLog.add("started, version ${BuildConfig.VERSION_NAME}")
     }
+
+    val web by lazy { WebHost(this) }
+
+    // what's on screen, for the status page
+    data class HubState(val dashboard: String = "", val page: Int = 1, val screenOn: Boolean = true)
+
+    @Volatile var hubState = HubState()
+
+    // the theme on screen as the model, the web editor styles itself from it
+    @Volatile var currentTheme: com.chardidathing.litehub.core.model.Theme? = null
 
     val ha: EntityRepository
         @Synchronized get() = _ha ?: EntityRepository(
             credentials = HaCredentials.load(File(filesDir, HA_FILE)),
             http = http,
             cache = EntityCache(this),
+            log = AppLog::add,
         ).also { _ha = it }
 
     // no file is no sources, a broken one is a failure the widgets show
@@ -58,11 +70,11 @@ class LitehubApp : Application() {
 
     val calendars: CalendarRepository
         @Synchronized get() = _calendars
-            ?: CalendarRepository(sources.getOrNull()?.calendars.orEmpty(), Fetcher(http), CalendarStore(this), ha).also { _calendars = it }
+            ?: CalendarRepository(sources.getOrNull()?.calendars.orEmpty(), Fetcher(http), CalendarStore(this), ha, log = AppLog::add).also { _calendars = it }
 
     val feeds: FeedRepository
         @Synchronized get() = _feeds
-            ?: FeedRepository(sources.getOrNull()?.feeds.orEmpty(), Fetcher(http), FeedStore(this)).also { _feeds = it }
+            ?: FeedRepository(sources.getOrNull()?.feeds.orEmpty(), Fetcher(http), FeedStore(this), log = AppLog::add).also { _feeds = it }
 
     val weather: WeatherRepository
         @Synchronized get() = _weather

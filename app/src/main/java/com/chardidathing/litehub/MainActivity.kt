@@ -69,6 +69,8 @@ class MainActivity : Activity() {
         editor = EditorFlow(this, app, root, scope, onSaved = ::load)
         companion = CompanionBridge(app, scope, Commands())
         admin = AdminFlow(this, app, root, scope, onReload = ::reload, onEdit = ::edit, onRestore = ::restorePrevious, companion = companion)
+        app.web.attach(this)
+        scope.launch(Dispatchers.IO) { app.web.apply() }
         load()
     }
 
@@ -183,6 +185,7 @@ class MainActivity : Activity() {
             window.attributes = window.attributes.apply { screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_OFF }
         }
         companion.update { it.copy(screenOn = on) }
+        app.hubState = app.hubState.copy(screenOn = on)
     }
 
     private fun showNotice(title: String?, message: String) {
@@ -257,7 +260,7 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun reload() {
+    fun reload() {
         admin.close()
         binder?.stop()
         app.calendars.stop()
@@ -269,7 +272,7 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun load() {
+    fun load() {
         val safe = Watchdog.inCrashLoop(app)
         val systemDark = resources.configuration.uiMode and
             Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
@@ -311,6 +314,7 @@ class MainActivity : Activity() {
                     it.onSettled = { page ->
                         if (started) b.show(page)
                         companion.update { c -> c.copy(page = page + 1) }
+                        app.hubState = app.hubState.copy(page = page + 1)
                     }
                     if (started) b.show(it.current)
                 }
@@ -327,7 +331,10 @@ class MainActivity : Activity() {
         root.addView(view)
         screenOff = null
         notice = null
-        ready?.let { r -> companion.update { it.copy(dashboard = r.config.activeDashboard, page = (pager?.current ?: 0) + 1) } }
+        ready?.let { r ->
+            companion.update { it.copy(dashboard = r.config.activeDashboard, page = (pager?.current ?: 0) + 1) }
+            app.hubState = app.hubState.copy(dashboard = r.config.activeDashboard, page = (pager?.current ?: 0) + 1)
+        }
         if (firstFrameDone) {
             // a reload built new repositories, they need starting like the first ones were
             app.ha.connect()
