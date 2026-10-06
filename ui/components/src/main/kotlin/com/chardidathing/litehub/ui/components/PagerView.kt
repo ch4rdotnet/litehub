@@ -147,6 +147,16 @@ class PagerView(context: Context, private val theme: ResolvedTheme, pages: List<
         }
     }
 
+    // straight to a page, no animation (ha asked for it, nobody is watching a swipe)
+    fun jumpTo(page: Int) {
+        if (page !in 0 until childCount) return
+        settling?.cancel()
+        settling = null
+        current = page
+        scrollTo(page * width, 0)
+        settled()
+    }
+
     private fun track(ev: MotionEvent) {
         (velocity ?: VelocityTracker.obtain().also { velocity = it }).addMovement(ev)
     }

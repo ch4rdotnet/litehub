@@ -36,20 +36,28 @@ class MenuView(
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         val gap = theme.spacing.m
-        // a column the width of a wide tile, centred, so rows aren't a whole screen wide
-        val width = minOf(w - theme.spacing.xl * 2, theme.touchTarget * COLUMN_TARGETS)
+        val margin = theme.spacing.xl
+        val width = minOf(w - margin * 2, theme.touchTarget * COLUMN_TARGETS)
         left = (w - width) / 2
         titleBlock.set(title, theme.type.h5, theme.colors.onBackground, width.toInt())
         detailBlock.set(detail.orEmpty(), theme.type.body2, theme.colors.onBackground, width.toInt())
         val headHeight = titleBlock.height + if (detail != null) theme.spacing.s + detailBlock.height else 0f
-        val listHeight = items.size * theme.touchTarget + (items.size - 1) * gap
-        titleTop = ((h - headHeight - theme.spacing.l - listHeight) / 2).coerceAtLeast(theme.spacing.xl)
+        // a long menu goes to two columns rather than running off the bottom
+        fun listHeight(count: Int) = count * theme.touchTarget + (count - 1).coerceAtLeast(0) * gap
+        val oneColumn = headHeight + theme.spacing.l + listHeight(items.size) <= h - margin * 2
+        val columns = if (oneColumn) 1 else 2
+        val rowCount = (items.size + columns - 1) / columns
+        val columnWidth = (width - gap * (columns - 1)) / columns
+        titleTop = ((h - headHeight - theme.spacing.l - listHeight(rowCount)) / 2).coerceAtLeast(margin)
         detailTop = titleTop + titleBlock.height + theme.spacing.s
-        var y = titleTop + headHeight + theme.spacing.l
+        val listTop = titleTop + headHeight + theme.spacing.l
         items.forEachIndexed { i, item ->
-            rows[i].set(left, y, left + width, y + theme.touchTarget)
-            itemBlocks[i].set(item, theme.type.subtitle1, theme.colors.onSurface, (width - theme.spacing.m * 2).toInt())
-            y += theme.touchTarget + gap
+            val col = i / rowCount
+            val row = i % rowCount
+            val x = left + col * (columnWidth + gap)
+            val y = listTop + row * (theme.touchTarget + gap)
+            rows[i].set(x, y, x + columnWidth, y + theme.touchTarget)
+            itemBlocks[i].set(item, theme.type.subtitle1, theme.colors.onSurface, (columnWidth - theme.spacing.m * 2).toInt())
         }
     }
 
