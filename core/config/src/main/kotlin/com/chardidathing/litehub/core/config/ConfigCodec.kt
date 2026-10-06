@@ -15,9 +15,9 @@ object ConfigCodec {
         val config = try {
             json.decodeFromString<Config>(text)
         } catch (e: SerializationException) {
-            throw ConfigException("config isn't valid, ${e.message}", e)
+            throw ConfigException("config isn't valid, ${e.summary()}", e)
         } catch (e: IllegalArgumentException) {
-            throw ConfigException("config isn't valid, ${e.message}", e)
+            throw ConfigException("config isn't valid, ${e.summary()}", e)
         }
         validate(config)
         return config

@@ -55,9 +55,9 @@ class Themes(presets: List<Theme>, user: List<JsonObject>) {
         val theme = try {
             ConfigCodec.json.decodeFromJsonElement(Theme.serializer(), merged)
         } catch (e: SerializationException) {
-            throw ConfigException("theme \"$id\" isn't valid, ${e.message}", e)
+            throw ConfigException("theme \"$id\" isn't valid, ${e.summary()}", e)
         } catch (e: IllegalArgumentException) {
-            throw ConfigException("theme \"$id\" isn't valid, ${e.message}", e)
+            throw ConfigException("theme \"$id\" isn't valid, ${e.summary()}", e)
         }
         resolved[id] = theme
         return theme
