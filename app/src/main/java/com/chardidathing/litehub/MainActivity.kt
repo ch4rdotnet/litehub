@@ -52,6 +52,7 @@ class MainActivity : Activity() {
     private var screenOff: View? = null
     private var notice: View? = null
     private var tts: TextToSpeech? = null
+    private val chime by lazy { Chime(this) }
     private val hideNotice = Runnable { notice?.let(root::removeView); notice = null }
     private var ready: Screen.Ready? = null
     private var theme: ResolvedTheme? = null
@@ -135,6 +136,7 @@ class MainActivity : Activity() {
 
     override fun onDestroy() {
         tts?.shutdown()
+        chime.release()
         scope.cancel()
         super.onDestroy()
     }
@@ -170,7 +172,10 @@ class MainActivity : Activity() {
             }
         }
 
-        override fun notify(title: String?, message: String) = showNotice(title, message)
+        override fun notify(title: String?, message: String, chime: Boolean) {
+            showNotice(title, message)
+            if (chime && app.settings.chime) this@MainActivity.chime.play()
+        }
     }
 
     private fun setScreen(on: Boolean) {

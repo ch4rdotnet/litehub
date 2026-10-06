@@ -33,7 +33,8 @@ class CompanionBridge(private val app: LitehubApp, private val scope: CoroutineS
         fun page(number: Int)
         fun reload()
         fun speak(text: String)
-        fun notify(title: String?, message: String)
+        // chime is false when the automation asked for a quiet one
+        fun notify(title: String?, message: String, chime: Boolean)
     }
 
     data class State(
@@ -136,7 +137,7 @@ class CompanionBridge(private val app: LitehubApp, private val scope: CoroutineS
                 "command_page" -> command?.intOrNull?.let(commands::page)
                 "command_reload" -> commands.reload()
                 "TTS" -> ((data?.get("tts_text") as? JsonPrimitive)?.contentOrNull ?: title)?.let(commands::speak)
-                else -> commands.notify(title, message)
+                else -> commands.notify(title, message, (data?.get("chime") as? JsonPrimitive)?.contentOrNull != "false")
             }
         }
     }

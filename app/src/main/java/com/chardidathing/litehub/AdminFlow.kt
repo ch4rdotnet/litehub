@@ -75,6 +75,12 @@ class AdminFlow(
             add("reload" to onReload)
             if (companion.registration == null) add("add to home assistant" to ::register)
             else add("unregister" to ::forget)
+            add((if (app.settings.chime) "chime: on" else "chime: off") to {
+                scope.launch {
+                    withContext(Dispatchers.IO) { app.saveSettings(app.settings.copy(chime = !app.settings.chime)) }
+                    menu()
+                }
+            })
             val web = app.settings.web
             add((if (web.editor) "web editor: on" else "web editor: off") to { toggleWeb { it.copy(editor = !it.editor) } })
             add((if (web.status) "status page: on" else "status page: off") to { toggleWeb { it.copy(status = !it.status) } })
