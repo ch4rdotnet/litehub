@@ -41,7 +41,7 @@ class SensorWidget(context: Context, theme: ResolvedTheme, icons: Icons, config:
         }
         val valueTop = content.bottom - valueBlock.height
         valueBlock.draw(canvas, content.left, valueTop)
-        // bottoms line up closely enough to read as a shared baseline at these sizes
-        unitBlock.draw(canvas, content.left + valueBlock.lineWidth + theme.spacing.xs, content.bottom - unitBlock.height)
+        val unitTop = valueTop + valueBlock.baseline - unitBlock.baseline
+        unitBlock.draw(canvas, content.left + valueBlock.lineWidth + theme.spacing.xs, unitTop)
     }
 }

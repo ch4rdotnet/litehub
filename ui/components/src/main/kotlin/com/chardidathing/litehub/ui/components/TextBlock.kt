@@ -18,6 +18,9 @@ class TextBlock(private val maxLines: Int = Int.MAX_VALUE) {
 
     val height: Int get() = layout?.height ?: 0
 
+    // first line's baseline from the top of the block, for lining up mixed sizes
+    val baseline: Int get() = layout?.takeIf { it.lineCount > 0 }?.getLineBaseline(0) ?: 0
+
     // width of the first line as drawn, for placing things after a single line value
     val lineWidth: Float get() = layout?.takeIf { it.lineCount > 0 }?.getLineWidth(0) ?: 0f
 
