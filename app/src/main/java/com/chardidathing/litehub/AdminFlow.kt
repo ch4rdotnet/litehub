@@ -33,7 +33,6 @@ class AdminFlow(
     private val scope: CoroutineScope,
     private val onReload: () -> Unit,
     private val onEdit: () -> Unit,
-    private val onRestore: () -> Unit,
     private val companion: CompanionBridge,
 ) {
 
@@ -76,14 +75,10 @@ class AdminFlow(
     private fun menu() {
         val t = theme ?: return
         screen = null
-        val previous = java.io.File(app.filesDir, LitehubApp.PREVIOUS_CONFIG_FILE).exists()
         val items = buildList {
             if (canEdit) add("edit layout" to { close(); onEdit() })
-            if (previous) add("restore previous layout" to { close(); onRestore() })
             add("settings" to ::settings)
             add("reload" to onReload)
-            if (companion.registration == null) add("add to home assistant" to ::register)
-            else add("unregister" to ::forget)
             add("close" to ::close)
         }
         val web = app.settings.web
@@ -114,7 +109,7 @@ class AdminFlow(
                     hideKeyboard()
                     menu()
                 }
-            })
+            }, extras = mapOf("ha" to ::registration))
             screen = s
             show(s, SETTINGS_IDLE_MS)
         }
@@ -214,6 +209,11 @@ class AdminFlow(
         show(pad)
     }
 
+    // the companion device, under the home assistant section
+    private fun registration() =
+        if (companion.registration == null) listOf("add to home assistant" to ::register)
+        else listOf("unregister from home assistant" to ::forget)
+
     private fun register() {
         val t = theme ?: return
         show(MenuView(activity, t, "registering", "adding this hub to home assistant as a device", emptyList()) {})
@@ -223,14 +223,14 @@ class AdminFlow(
                 { "registered" to "home assistant now has this hub as a device. ${companion.notifyService} sends to this screen" },
                 { "couldn't register" to (it.message ?: "home assistant refused") },
             )
-            show(MenuView(activity, t, title, detail, listOf("ok")) { menu() })
+            show(MenuView(activity, t, title, detail, listOf("ok")) { backToSettings() })
         }
     }
 
     private fun forget() {
         scope.launch {
             companion.forget()
-            menu()
+            backToSettings()
         }
     }
 

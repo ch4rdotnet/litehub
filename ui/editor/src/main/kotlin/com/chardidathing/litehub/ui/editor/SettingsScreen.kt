@@ -28,6 +28,8 @@ class SettingsScreen(
     current: JsonObject,
     private val actions: List<ActionSection>,
     private val host: Host,
+    // buttons only this device has, shown under a shared section's fields, by section id
+    private val extras: Map<String, () -> List<Pair<String, () -> Unit>>> = emptyMap(),
 ) : LinearLayout(context) {
 
     // items is label to action, asked for again whenever the section is shown. info hands back
@@ -117,6 +119,10 @@ class SettingsScreen(
         for (action in section.actions) {
             pane.addView(space(theme.spacing.m.toInt()))
             pane.addView(ButtonView(context, theme, action.label) { run(action.value) })
+        }
+        for ((label, action) in extras[section.id]?.invoke().orEmpty()) {
+            pane.addView(space(theme.spacing.m.toInt()))
+            pane.addView(ButtonView(context, theme, label, action))
         }
     }
 
