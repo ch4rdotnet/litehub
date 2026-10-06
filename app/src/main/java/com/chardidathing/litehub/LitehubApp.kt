@@ -1,6 +1,7 @@
 package com.chardidathing.litehub
 
 import android.app.Application
+import android.os.Build
 import com.chardidathing.litehub.core.config.ConfigException
 import com.chardidathing.litehub.core.config.SettingsCodec
 import com.chardidathing.litehub.core.config.SourcesCodec
@@ -143,5 +144,7 @@ class LitehubApp : Application() {
         const val SOURCES_FILE = "sources.json"
         const val SETTINGS_FILE = "settings.json"
         const val HTTP_CACHE_BYTES = 10L * 1024 * 1024
+        // what ha calls the hub, as a companion device and as a dlna renderer
+        val DEVICE_NAME = "litehub ${Build.MODEL}".lowercase()
     }
 }

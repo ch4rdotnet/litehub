@@ -31,8 +31,6 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
 import java.lang.ref.WeakReference
-import java.net.Inet4Address
-import java.net.NetworkInterface
 import java.time.Instant
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -77,10 +75,7 @@ class WebHost(private val app: LitehubApp) : HubAccess {
 
     // what to type into a browser on the same network
     fun address(): String? {
-        val ip = NetworkInterface.getNetworkInterfaces()?.toList().orEmpty()
-            .filter { it.isUp && !it.isLoopback }
-            .flatMap { it.inetAddresses.toList() }
-            .firstOrNull { it is Inet4Address && it.isSiteLocalAddress } ?: return null
+        val ip = Lan.address() ?: return null
         return "http://${ip.hostAddress}:${app.settings.web.port}"
     }
 

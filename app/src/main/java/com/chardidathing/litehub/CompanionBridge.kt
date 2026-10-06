@@ -57,7 +57,6 @@ class CompanionBridge(private val app: LitehubApp, private val scope: CoroutineS
     val registration: CompanionRegistration? get() = app.settings.companion
 
     // two hubs called the same thing fight over one notify service, so the model goes in the name
-    private val deviceName = "litehub ${Build.MODEL}".lowercase()
 
     // the legacy notify service ha makes for this device, it's what automations call
     val notifyService: String? get() = registration?.name?.let { "notify.mobile_app_" + it.replace(Regex("[^a-z0-9]+"), "_").trim('_') }
@@ -84,10 +83,10 @@ class CompanionBridge(private val app: LitehubApp, private val scope: CoroutineS
     suspend fun register(): Result<Unit> {
         val mobileApp = app.ha.mobileApp ?: return Result.failure(IllegalStateException("home assistant isn't set up"))
         val deviceId = registration?.deviceId ?: UUID.randomUUID().toString()
-        val device = MobileApp.Device(deviceId, deviceName, BuildConfig.VERSION_NAME, Build.MANUFACTURER, Build.MODEL, Build.VERSION.RELEASE)
+        val device = MobileApp.Device(deviceId, LitehubApp.DEVICE_NAME, BuildConfig.VERSION_NAME, Build.MANUFACTURER, Build.MODEL, Build.VERSION.RELEASE)
         val webhook = mobileApp.register(device).getOrElse { return Result.failure(it) }
         for (sensor in sensors()) mobileApp.registerSensor(webhook, sensor).onFailure { return Result.failure(it) }
-        withContext(Dispatchers.IO) { app.saveSettings(app.settings.copy(companion = CompanionRegistration(deviceId, webhook, deviceName))) }
+        withContext(Dispatchers.IO) { app.saveSettings(app.settings.copy(companion = CompanionRegistration(deviceId, webhook, LitehubApp.DEVICE_NAME))) }
         start()
         return Result.success(Unit)
     }
