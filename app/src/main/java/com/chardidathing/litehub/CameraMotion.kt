@@ -26,6 +26,9 @@ class CameraMotion(context: Context, private val onMotion: () -> Unit) {
     private var previous: IntArray? = null
     private var lastFrame = 0L
 
+    // how much of the picture has to change, set from settings
+    @Volatile var changedPercent = 0
+
     val available get() = cameras.cameraIdList.isNotEmpty()
 
     @SuppressLint("MissingPermission") // the controller checks before starting
@@ -106,7 +109,7 @@ class CameraMotion(context: Context, private val onMotion: () -> Unit) {
         previous = cells
         if (before == null) return
         val changed = cells.indices.count { abs(cells[it] - before[it]) > CELL_CHANGE }
-        if (changed * PERCENT / cells.size >= CHANGED_PERCENT) onMotion()
+        if (changed * PERCENT / cells.size >= changedPercent) onMotion()
     }
 
     private companion object {
@@ -118,7 +121,6 @@ class CameraMotion(context: Context, private val onMotion: () -> Unit) {
         const val FRAME_MS = 500L
         // a cell has to change this much brightness (of 255) to count, sensor noise stays under it
         const val CELL_CHANGE = 25
-        const val CHANGED_PERCENT = 6
         const val PERCENT = 100
         const val BYTE = 0xFF
     }

@@ -164,6 +164,9 @@ class ScreensaverController(private val app: LitehubApp, private val scope: Coro
     private fun watchSensors(m: Mode) {
         val s = app.settings.screensaver
         val sleeping = m != Mode.AWAKE
+        light.ratio = s.lightWakeRatio
+        light.minLux = s.lightWakeLux.toFloat()
+        camera.changedPercent = s.cameraWakePercent
         if (sleeping && s.lightWake && light.available) light.start() else light.stop()
         val cameraOk = s.cameraWake && !DeviceTier.isLow(app) && camera.available &&
             app.checkSelfPermission(android.Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED

@@ -9,9 +9,9 @@ import com.chardidathing.litehub.ui.tokens.Easing
 import com.chardidathing.litehub.ui.tokens.ResolvedTheme
 
 // notice cards stacked down from the top, newest first. each one leaves on its own after holdMs,
-// and past max the oldest is pushed out to make room
+// and past max the oldest is pushed out to make room. both can change between pushes
 @SuppressLint("ViewConstructor")
-class NoticeStack(context: Context, private val theme: ResolvedTheme, private val max: Int, private val holdMs: Long) : LinearLayout(context) {
+class NoticeStack(context: Context, private val theme: ResolvedTheme, var max: Int, var holdMs: Long) : LinearLayout(context) {
 
     private val leaving = mutableSetOf<NoticeView>()
 

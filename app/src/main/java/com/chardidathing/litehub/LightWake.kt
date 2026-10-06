@@ -14,6 +14,10 @@ class LightWake(context: Context, private val onWake: () -> Unit) : SensorEventL
     private val light = sensors.getDefaultSensor(Sensor.TYPE_LIGHT)
     private var baseline = -1f
 
+    // a jump is this many times the baseline and at least minLux more, set from settings
+    var ratio = 1f
+    var minLux = 0f
+
     val available get() = light != null
 
     fun start() {
@@ -30,7 +34,7 @@ class LightWake(context: Context, private val onWake: () -> Unit) : SensorEventL
             baseline = lux
             return
         }
-        if (lux > baseline * JUMP_RATIO && lux - baseline > MIN_JUMP_LUX) {
+        if (lux > baseline * ratio && lux - baseline > minLux) {
             baseline = lux
             onWake()
             return
@@ -41,8 +45,6 @@ class LightWake(context: Context, private val onWake: () -> Unit) : SensorEventL
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
 
     private companion object {
-        const val JUMP_RATIO = 3f
-        const val MIN_JUMP_LUX = 15f
         const val SMOOTHING = 0.1f
     }
 }

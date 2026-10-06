@@ -12,7 +12,8 @@ import java.io.File
 import java.util.UUID
 
 // the hub's recent notifications, newest first, kept on disk so a reboot doesn't lose them
-class NotificationCenter(private val dir: File, private val scope: CoroutineScope) {
+// keep is read on every add, so a settings change applies to the next one
+class NotificationCenter(private val dir: File, private val scope: CoroutineScope, private val keep: () -> Int) {
 
     private val file get() = File(dir, FILE)
     private val serializer = ListSerializer(HubNotification.serializer())
@@ -23,7 +24,7 @@ class NotificationCenter(private val dir: File, private val scope: CoroutineScop
     fun add(title: String?, message: String, tag: String?): HubNotification {
         val n = HubNotification(UUID.randomUUID().toString(), title, message, System.currentTimeMillis(), tag)
         // a tagged notification replaces the last one with that tag, like ha's companion app
-        update { list -> (listOf(n) + list.filter { tag == null || it.tag != tag }).take(KEEP) }
+        update { list -> (listOf(n) + list.filter { tag == null || it.tag != tag }).take(keep()) }
         return n
     }
 
@@ -45,6 +46,5 @@ class NotificationCenter(private val dir: File, private val scope: CoroutineScop
 
     private companion object {
         const val FILE = "notifications.json"
-        const val KEEP = 50
     }
 }

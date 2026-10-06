@@ -70,7 +70,7 @@ class CompanionBridge(private val app: LitehubApp, private val scope: CoroutineS
         heartbeat = scope.launch {
             while (true) {
                 send()
-                delay(HEARTBEAT_MS)
+                delay(app.settings.reporting.heartbeatMinutes * MINUTE_MS)
             }
         }
     }
@@ -113,7 +113,7 @@ class CompanionBridge(private val app: LitehubApp, private val scope: CoroutineS
     fun interacted() {
         val now = System.currentTimeMillis()
         state = state.copy(lastInteraction = now)
-        if (now - lastInteractionReport < INTERACTION_REPORT_MS) return
+        if (now - lastInteractionReport < app.settings.reporting.interactionSeconds * MS_PER_S) return
         lastInteractionReport = now
         scope.launch { send() }
     }
@@ -206,7 +206,7 @@ class CompanionBridge(private val app: LitehubApp, private val scope: CoroutineS
         const val MAX_LEVEL = 255
         const val PERCENT = 100
         const val DEBOUNCE_MS = 2_000L
-        const val HEARTBEAT_MS = 15 * 60_000L
-        const val INTERACTION_REPORT_MS = 60_000L
+        const val MINUTE_MS = 60_000L
+        const val MS_PER_S = 1000L
     }
 }

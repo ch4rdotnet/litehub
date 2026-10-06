@@ -51,9 +51,7 @@ class MainActivity : Activity() {
         const val PERCENT = 100f
         const val MS_PER_S = 1000L
         const val MAX_LEVEL = 255f
-        // a notification banner stays this long unless it's tapped away
-        const val NOTICE_MS = 5_000L
-        const val MAX_NOTICES = 7
+        const val MINUTE_MS = 60_000L
         val ACTIVE = setOf(Transport.TRANSITIONING, Transport.PLAYING, Transport.PAUSED)
     }
 
@@ -232,7 +230,7 @@ class MainActivity : Activity() {
             val photos = settings.photos
             // the photo frame is one of the first things a low ram device does without
             if (photos != null && !DeviceTier.isLow(app)) saverJobs += scope.launch {
-                val frame = PhotoFrame(photos, app.ha, app.http)
+                val frame = PhotoFrame(photos, settings.photoRefreshMinutes * MINUTE_MS, app.ha, app.http)
                 while (true) {
                     val w = root.width
                     val h = root.height
@@ -288,13 +286,16 @@ class MainActivity : Activity() {
     // top right, slides in, slides out again after a few seconds. a newer one takes its place
     private fun showNotice(title: String?, message: String) {
         val theme = this.theme ?: return
-        val stack = notices ?: NoticeStack(this, theme, MAX_NOTICES, NOTICE_MS).also { stack ->
+        val n = app.settings.notifications
+        val stack = notices ?: NoticeStack(this, theme, n.maxBanners, n.bannerSeconds * MS_PER_S).also { stack ->
             notices = stack
             val margin = theme.spacing.m.toInt()
             root.addView(stack, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.END).apply {
                 setMargins(margin, margin, margin, margin)
             })
         }
+        stack.max = n.maxBanners
+        stack.holdMs = n.bannerSeconds * MS_PER_S
         stack.push(title, message)
     }
 

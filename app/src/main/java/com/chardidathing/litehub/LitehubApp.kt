@@ -2,6 +2,7 @@ package com.chardidathing.litehub
 
 import android.app.Application
 import android.os.Build
+import kotlinx.coroutines.launch
 import com.chardidathing.litehub.core.config.ConfigException
 import com.chardidathing.litehub.core.config.SettingsCodec
 import com.chardidathing.litehub.core.config.SourcesCodec
@@ -54,7 +55,7 @@ class LitehubApp : Application() {
 
     val screensaver by lazy { ScreensaverController(this, scope) }
 
-    val notifications by lazy { NotificationCenter(filesDir, scope) }
+    val notifications by lazy { NotificationCenter(filesDir, scope) { settings.notifications.keep } }
 
     val dlna by lazy { DlnaHost(this) }
 
@@ -98,6 +99,14 @@ class LitehubApp : Application() {
     fun saveSettings(settings: DeviceSettings) {
         File(filesDir, SETTINGS_FILE).writeAtomic(SettingsCodec.encode(settings))
         _settings = settings
+    }
+
+    // saves and tells everything that reads settings. blocking (the servers bind sockets), so not on main
+    fun updateSettings(next: DeviceSettings) {
+        saveSettings(next)
+        web.apply()
+        dlna.apply()
+        scope.launch { screensaver.reload() }
     }
 
     // forget everything read from ha.json, sources.json and settings.json, next use reads again

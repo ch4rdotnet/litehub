@@ -16,7 +16,7 @@ import java.io.IOException
 
 // the next photo for the screensaver, from whichever source is set, shuffled, the list
 // refreshed now and then so new photos turn up
-class PhotoFrame(settings: PhotoSettings, ha: EntityRepository, http: OkHttpClient) {
+class PhotoFrame(settings: PhotoSettings, private val refreshMs: Long, ha: EntityRepository, http: OkHttpClient) {
 
     private val source: PhotoSource = when {
         settings.folder != null -> FolderPhotos(File(settings.folder))
@@ -27,7 +27,7 @@ class PhotoFrame(settings: PhotoSettings, ha: EntityRepository, http: OkHttpClie
     private var listedAt = 0L
 
     suspend fun next(width: Int, height: Int): Result<Bitmap> {
-        if (queue.isEmpty() || System.currentTimeMillis() - listedAt > RELIST_MS) {
+        if (queue.isEmpty() || System.currentTimeMillis() - listedAt > refreshMs) {
             val all = source.list().getOrElse { return Result.failure(it) }
             if (all.isEmpty()) return Result.failure(IOException("there are no photos there yet"))
             queue = ArrayDeque(all.shuffled())
@@ -41,9 +41,5 @@ class PhotoFrame(settings: PhotoSettings, ha: EntityRepository, http: OkHttpClie
             if (bitmap != null) return Result.success(bitmap)
         }
         return Result.failure(IOException("none of the photos would load"))
-    }
-
-    private companion object {
-        const val RELIST_MS = 60 * 60_000L
     }
 }
