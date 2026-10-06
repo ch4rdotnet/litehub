@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.view.View
+import com.chardidathing.litehub.ui.tokens.Presets
 import com.chardidathing.litehub.ui.tokens.ResolvedTheme
 import kotlin.random.Random
 
@@ -46,8 +47,8 @@ class ScreensaverView(context: Context, private val theme: ResolvedTheme) : View
 
     private fun layoutText() {
         val w = width - (theme.spacing.xl * 2).toInt()
-        time.set(timeText, theme.type.h1, theme.colors.onBackground, w)
-        date.set(dateText, theme.type.h5, theme.colors.onBackground, w)
+        time.set(timeText, theme.type.h1, Presets.OVER_PHOTO, w)
+        date.set(dateText, theme.type.h5, Presets.OVER_PHOTO, w)
     }
 
     override fun onDraw(canvas: Canvas) {

@@ -124,6 +124,10 @@ object Presets {
     // what a "screen off" overlay draws, black pixels are dark on lcd and off on oled
     const val SCREEN_OFF = 0xFF000000.toInt()
 
+    // the screensaver's clock, over photos or black whatever the theme, a light theme's dark text
+    // would vanish there
+    const val OVER_PHOTO = 0xFFFFFFFF.toInt()
+
     // around a video that doesn't fill the screen, any other colour shows up as a frame
     const val LETTERBOX = 0xFF000000.toInt()
 
