@@ -85,7 +85,6 @@ class WebHost(private val app: LitehubApp) : HubAccess {
     override fun saveConfig(text: String): Result<Unit> = validated {
         ConfigCodec.decode(text)
         val file = File(app.filesDir, LitehubApp.CONFIG_FILE)
-        if (file.exists()) file.copyTo(File(app.filesDir, LitehubApp.PREVIOUS_CONFIG_FILE), overwrite = true)
         file.writeAtomic(text)
         AppLog.add("config saved from the web editor")
         onActivity { it.load() }

@@ -23,7 +23,7 @@ import java.io.File
 import java.io.IOException
 
 // the on-device editor, a stack of screens over the dashboard: the layout, a widget's settings,
-// the entity picker. done writes config.json and keeps the one before as config.prev.json
+// the entity picker. done writes config.json
 class EditorFlow(
     private val activity: Activity,
     private val app: LitehubApp,
@@ -132,7 +132,6 @@ class EditorFlow(
         val text = ConfigCodec.encode(config)
         ConfigCodec.decode(text)
         val file = File(app.filesDir, LitehubApp.CONFIG_FILE)
-        if (file.exists()) file.copyTo(File(app.filesDir, LitehubApp.PREVIOUS_CONFIG_FILE), overwrite = true)
         file.writeAtomic(text)
         Result.success(Unit)
     } catch (e: ConfigException) {

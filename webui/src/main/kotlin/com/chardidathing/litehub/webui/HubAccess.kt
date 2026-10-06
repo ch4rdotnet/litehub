@@ -10,7 +10,7 @@ interface HubAccess {
 
     fun config(): String
 
-    // validated first, the old one is kept as config.prev.json, the dashboard reloads
+    // validated first, the dashboard reloads
     fun saveConfig(text: String): Result<Unit>
 
     // calendars and feeds, the layout editor names them in widget settings

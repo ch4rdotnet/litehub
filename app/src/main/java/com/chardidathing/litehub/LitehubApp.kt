@@ -205,7 +205,6 @@ class LitehubApp : Application() {
     companion object {
         const val HA_FILE = "ha.json"
         const val CONFIG_FILE = "config.json"
-        const val PREVIOUS_CONFIG_FILE = "config.prev.json"
         const val SOURCES_FILE = "sources.json"
         const val SETTINGS_FILE = "settings.json"
         const val HTTP_CACHE_BYTES = 10L * 1024 * 1024

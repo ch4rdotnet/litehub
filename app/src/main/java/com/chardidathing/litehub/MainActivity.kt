@@ -85,7 +85,7 @@ class MainActivity : Activity() {
         Kiosk.immerse(window)
         editor = EditorFlow(this, app, root, scope, onSaved = ::load)
         companion = CompanionBridge(app, scope, Commands())
-        admin = AdminFlow(this, app, root, scope, onReload = ::reload, onEdit = ::edit, onRestore = ::restorePrevious, companion = companion)
+        admin = AdminFlow(this, app, root, scope, onReload = ::reload, onEdit = ::edit, companion = companion)
         app.web.attach(this)
         // a panel turned off by device admin comes back on to this, over the keyguard
         setShowWhenLocked(true)
@@ -434,20 +434,6 @@ class MainActivity : Activity() {
     private fun edit() {
         val screen = ready ?: return
         editor.open(screen.theme, screen.config, pager?.current ?: 0, screen.legend)
-    }
-
-    // swaps config.json with the one saved before the last edit, so it can be swapped back too
-    private fun restorePrevious() {
-        scope.launch {
-            withContext(Dispatchers.IO) {
-                val current = java.io.File(app.filesDir, LitehubApp.CONFIG_FILE)
-                val previous = java.io.File(app.filesDir, LitehubApp.PREVIOUS_CONFIG_FILE)
-                val text = previous.readText()
-                if (current.exists()) previous.writeAtomic(current.readText()) else previous.delete()
-                current.writeAtomic(text)
-            }
-            load()
-        }
     }
 
     fun reload() {
