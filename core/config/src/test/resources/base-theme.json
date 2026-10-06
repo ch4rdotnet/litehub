@@ -19,5 +19,6 @@
     "body1": { "size": 16, "weight": 400 }, "body2": { "size": 14, "weight": 400 },
     "button": { "size": 14, "weight": 500 }, "caption": { "size": 12, "weight": 400 },
     "overline": { "size": 10, "weight": 400 }
-  }
+  },
+  "motion": { "animations": true, "pageSettleMs": 250 }
 }

@@ -1,6 +1,7 @@
 package com.chardidathing.litehub.ui.tokens
 
 import com.chardidathing.litehub.core.model.Colors
+import com.chardidathing.litehub.core.model.Motion
 import com.chardidathing.litehub.core.model.Radii
 import com.chardidathing.litehub.core.model.Spacing
 import com.chardidathing.litehub.core.model.TextStyle
@@ -18,6 +19,8 @@ object Presets {
     // md2 type scale, light (300) falls back to the nearest bundled weight
     // md2 says 24, a wall panel is read from further away
     private val iconSize = 32f
+
+    private val motion = Motion(animations = true, pageSettleMs = 250)
 
     private val type = TypeScale(
         h1 = TextStyle(size = 96f, weight = 300),
@@ -58,6 +61,7 @@ object Presets {
         iconSize = iconSize,
         font = Fonts.LEXEND,
         type = type,
+        motion = motion,
     )
 
     val md2Dark = Theme(
@@ -83,6 +87,7 @@ object Presets {
         iconSize = iconSize,
         font = Fonts.LEXEND,
         type = type,
+        motion = motion,
     )
 
     // #000000 background, black pixels are off on oled so only tiles and text light up

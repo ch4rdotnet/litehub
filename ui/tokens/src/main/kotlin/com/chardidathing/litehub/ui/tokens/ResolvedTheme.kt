@@ -8,7 +8,7 @@ import com.chardidathing.litehub.core.model.TextStyle
 import com.chardidathing.litehub.core.model.Theme
 
 // a theme turned into px and typefaces for drawing, build it off the main thread
-class ResolvedTheme(theme: Theme, metrics: DisplayMetrics, fonts: Fonts) {
+class ResolvedTheme(theme: Theme, metrics: DisplayMetrics, fonts: Fonts, lowTier: Boolean) {
 
     val colors: Colors = theme.colors
 
@@ -27,6 +27,9 @@ class ResolvedTheme(theme: Theme, metrics: DisplayMetrics, fonts: Fonts) {
     )
 
     val iconSize = dp(theme.iconSize, metrics)
+
+    // zero when animations are off, so callers jump straight to the end state
+    val pageSettleMs = if (theme.motion.animations && !lowTier) theme.motion.pageSettleMs else 0
 
     val type = with(theme.type) {
         fun r(style: TextStyle) = Text(

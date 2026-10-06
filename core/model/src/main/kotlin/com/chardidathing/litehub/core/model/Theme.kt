@@ -28,7 +28,12 @@ data class Theme(
     val iconSize: Float,
     val font: String,
     val type: TypeScale,
+    val motion: Motion,
 )
+
+// animations are opt-in per theme, and low tier devices turn them off regardless
+@Serializable
+data class Motion(val animations: Boolean, val pageSettleMs: Int)
 
 // md2 colour roles
 @Serializable
