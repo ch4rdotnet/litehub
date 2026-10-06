@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>a blog</title>
+  <entry>
+    <title type="html">Release 2.0</title>
+    <link rel="replies" href="https://example.org/2.0#comments"/>
+    <link rel="alternate" href="https://example.org/2.0"/>
+    <id>tag:example.org,2026:2.0</id>
+    <updated>2026-10-05T10:00:00+10:30</updated>
+    <published>2026-10-05T09:00:00+10:30</published>
+  </entry>
+</feed>

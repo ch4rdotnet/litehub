@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/">
+<channel>
+  <title>local news</title>
+  <item>
+    <title><![CDATA[Council <b>approves</b> new   bike lanes]]></title>
+    <link>https://example.org/bikes</link>
+    <guid isPermaLink="false">bikes-1</guid>
+    <pubDate>Wed, 07 Oct 2026 09:00:00 +1030</pubDate>
+  </item>
+  <item>
+    <title>Fish &amp; chips shop reopens</title>
+    <link>https://example.org/fish</link>
+    <dc:date>2026-10-06T08:00:00Z</dc:date>
+  </item>
+  <item>
+    <title>No date on this one</title>
+  </item>
+</channel>
+</rss>
