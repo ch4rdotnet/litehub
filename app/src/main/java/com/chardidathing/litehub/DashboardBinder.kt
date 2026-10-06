@@ -14,8 +14,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
-// feeds only the pages on screen, that's two while a swipe is between them. pages holds each
-// page's widgets, anything that isn't fed by a source is skipped
+// feeds the page on screen and keeps its neighbours laid out with their last known data, so a
+// swipe only has to slide them in. only the page on screen is subscribed to ha. pages holds
+// each page's widgets, anything that isn't fed by a source is skipped
 class DashboardBinder(
     private val ha: EntityRepository,
     private val calendars: CalendarRepository,
@@ -35,15 +36,15 @@ class DashboardBinder(
         }
     }
 
-    fun show(first: Int, last: Int) {
-        val range = first..last
+    fun show(page: Int) {
+        val range = page - 1..page + 1
         jobs.keys.filter { it !in range }.forEach { page -> jobs.remove(page)?.forEach(Job::cancel) }
         for (page in range) {
             if (page in jobs) continue
             val widgets = pages.getOrNull(page) ?: continue
             jobs[page] = widgets.mapNotNull(::bind)
         }
-        val entities = range.flatMap { pages.getOrNull(it).orEmpty() }.filterIsInstance<EntityWidget>()
+        val entities = pages.getOrNull(page).orEmpty().filterIsInstance<EntityWidget>()
         ha.setVisible(entities.mapTo(HashSet()) { it.config.entity })
     }
 

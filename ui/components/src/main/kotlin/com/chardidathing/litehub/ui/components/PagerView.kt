@@ -12,8 +12,6 @@ import android.view.animation.DecelerateInterpolator
 import android.widget.OverScroller
 import com.chardidathing.litehub.ui.tokens.ResolvedTheme
 import kotlin.math.abs
-import kotlin.math.ceil
-import kotlin.math.floor
 import kotlin.math.roundToInt
 
 // pages side by side, swiped horizontally. a swipe only moves the scroll offset, so pages
@@ -21,8 +19,9 @@ import kotlin.math.roundToInt
 // more than one page
 class PagerView(context: Context, private val theme: ResolvedTheme, pages: List<View>) : ViewGroup(context) {
 
-    // pages at least partly on screen, called whenever the range changes
-    var onVisible: ((first: Int, last: Int) -> Unit)? = null
+    // the page a swipe came to rest on. posted after the settling frame, never called from
+    // inside a touch event, so whatever it sets off can't cost the swipe a frame
+    var onSettled: ((page: Int) -> Unit)? = null
 
     var current = 0
         private set
@@ -34,8 +33,6 @@ class PagerView(context: Context, private val theme: ResolvedTheme, pages: List<
     private var downY = 0f
     private var lastX = 0f
     private var dragging = false
-    private var first = 0
-    private var last = 0
 
     private val dotFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = theme.colors.onBackground }
     private val dotRing = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -47,10 +44,6 @@ class PagerView(context: Context, private val theme: ResolvedTheme, pages: List<
     init {
         pages.forEach(::addView)
     }
-
-    val firstVisible get() = first
-
-    val lastVisible get() = last
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val w = MeasureSpec.getSize(widthMeasureSpec)
@@ -131,6 +124,7 @@ class PagerView(context: Context, private val theme: ResolvedTheme, pages: List<
         val dx = target * width - scrollX
         if (theme.pageSettleMs == 0 || dx == 0) {
             scrollTo(target * width, 0)
+            settled()
         } else {
             scroller.startScroll(scrollX, 0, dx, 0, theme.pageSettleMs)
             postInvalidateOnAnimation()
@@ -141,19 +135,13 @@ class PagerView(context: Context, private val theme: ResolvedTheme, pages: List<
         if (scroller.computeScrollOffset()) {
             scrollTo(scroller.currX, 0)
             postInvalidateOnAnimation()
+            if (scroller.isFinished) settled()
         }
     }
 
-    override fun onScrollChanged(l: Int, t: Int, oldl: Int, oldt: Int) {
-        super.onScrollChanged(l, t, oldl, oldt)
-        if (width == 0) return
-        val position = l.toFloat() / width
-        val f = floor(position).toInt()
-        val s = ceil(position).toInt()
-        if (f == first && s == last) return
-        first = f
-        last = s
-        onVisible?.invoke(f, s)
+    private fun settled() {
+        val page = current
+        post { onSettled?.invoke(page) }
     }
 
     override fun dispatchDraw(canvas: Canvas) {

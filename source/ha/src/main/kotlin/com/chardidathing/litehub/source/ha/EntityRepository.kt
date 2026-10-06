@@ -40,6 +40,8 @@ class EntityRepository(
     private val fresh = HashSet<String>()
     private val notFound = HashSet<String>()
     private val optimistic = HashMap<String, Entity>()
+    // what's on screen and subscribed, everything else is shown as last known
+    private var visible: Set<String> = emptySet()
     private val errors = HashMap<String, String>()
     private val flows = ConcurrentHashMap<String, MutableStateFlow<EntitySnapshot>>()
     private val dirty = HashSet<String>()
@@ -65,7 +67,12 @@ class EntityRepository(
             .also { scope.launch { publish(id) } }
 
     fun setVisible(ids: Set<String>) {
-        scope.launch { client?.setEntityIds(ids) }
+        scope.launch {
+            val dropped = visible - ids
+            visible = ids
+            client?.setEntityIds(ids)
+            dropped.forEach(::publish)
+        }
     }
 
     fun canToggle(id: String) = id.substringBefore('.') in TOGGLE_DOMAINS
@@ -149,6 +156,8 @@ class EntityRepository(
             HaClient.Status.Connected -> when {
                 id in notFound -> EntitySnapshot.NotFound
                 entity != null && id in fresh -> EntitySnapshot.Live(entity, error)
+                // a neighbouring page, ha isn't sending it but nothing's wrong either
+                entity != null && id !in visible -> EntitySnapshot.Live(entity, error)
                 entity != null -> EntitySnapshot.Stale(entity, CONNECTING, error)
                 else -> EntitySnapshot.Connecting
             }

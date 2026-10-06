@@ -42,7 +42,7 @@ class MainActivity : Activity() {
         started = true
         ticker.start()
         if (firstFrameDone) startSources()
-        pager?.let { binder?.show(it.firstVisible, it.lastVisible) }
+        pager?.let { binder?.show(it.current) }
     }
 
     override fun onStop() {
@@ -102,8 +102,8 @@ class MainActivity : Activity() {
                 binder = b
                 PagerView(this, theme, pages).also {
                     pager = it
-                    it.onVisible = { first, last -> if (started) b.show(first, last) }
-                    if (started) b.show(it.firstVisible, it.lastVisible)
+                    it.onSettled = { page -> if (started) b.show(page) }
+                    if (started) b.show(it.current)
                 }
             }
             is Screen.Failed -> MessageView(this, theme, "config couldn't be loaded", screen.reason)
