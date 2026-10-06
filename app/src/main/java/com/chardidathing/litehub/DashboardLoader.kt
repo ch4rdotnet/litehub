@@ -4,6 +4,7 @@ import android.util.DisplayMetrics
 import com.chardidathing.litehub.core.config.ConfigCodec
 import com.chardidathing.litehub.core.config.ConfigException
 import com.chardidathing.litehub.core.config.Themes
+import com.chardidathing.litehub.core.model.Config
 import com.chardidathing.litehub.core.model.Page
 import com.chardidathing.litehub.core.model.Theme
 import com.chardidathing.litehub.ui.components.Icons
@@ -17,7 +18,7 @@ import java.io.IOException
 sealed interface Screen {
     val theme: ResolvedTheme
 
-    class Ready(override val theme: ResolvedTheme, val pages: List<Page>, val icons: Icons, val legend: Legend) : Screen
+    class Ready(override val theme: ResolvedTheme, val config: Config, val pages: List<Page>, val icons: Icons, val legend: Legend) : Screen
 
     class Failed(override val theme: ResolvedTheme, val reason: String) : Screen
 }
@@ -41,7 +42,7 @@ class DashboardLoader(private val app: LitehubApp) {
         if (entityIds.isNotEmpty()) app.ha.preload(entityIds)
         app.calendars.preload()
         app.feeds.preload()
-        Screen.Ready(ResolvedTheme(theme, metrics, app.fonts, DeviceTier.isLow(app)), dashboard.pages, app.icons, legend(theme))
+        Screen.Ready(ResolvedTheme(theme, metrics, app.fonts, DeviceTier.isLow(app)), config, dashboard.pages, app.icons, legend(theme))
     } catch (e: ConfigException) {
         failed(e.message.orEmpty(), systemDark, metrics)
     } catch (e: IOException) {

@@ -32,6 +32,8 @@ class MainActivity : Activity() {
     private val ticker by lazy { Ticker(this) }
     private lateinit var root: FrameLayout
     private lateinit var admin: AdminFlow
+    private lateinit var editor: EditorFlow
+    private var ready: Screen.Ready? = null
     private var theme: ResolvedTheme? = null
     private var started = false
     private var reportedDrawn = false
@@ -44,7 +46,8 @@ class MainActivity : Activity() {
         setContentView(root)
         // after setContentView, the insets controller needs the decor view to exist
         Kiosk.immerse(window)
-        admin = AdminFlow(this, app, root, scope, onReload = ::reload)
+        editor = EditorFlow(this, app, root, scope, onSaved = ::load)
+        admin = AdminFlow(this, app, root, scope, onReload = ::reload, onEdit = ::edit, onRestore = ::restorePrevious)
         load()
     }
 
@@ -57,7 +60,10 @@ class MainActivity : Activity() {
     // a launcher has nowhere to go back to, back only closes the menu
     @Deprecated("still the only back hook on api 28")
     override fun onBackPressed() {
-        if (admin.isOpen) admin.close()
+        when {
+            editor.isOpen -> editor.back()
+            admin.isOpen -> admin.close()
+        }
     }
 
     // home pressed while already home
@@ -98,6 +104,25 @@ class MainActivity : Activity() {
         app.feeds.start()
     }
 
+    private fun edit() {
+        val screen = ready ?: return
+        editor.open(screen.theme, screen.config, pager?.current ?: 0, screen.legend)
+    }
+
+    // swaps config.json with the one saved before the last edit, so it can be swapped back too
+    private fun restorePrevious() {
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                val current = java.io.File(app.filesDir, LitehubApp.CONFIG_FILE)
+                val previous = java.io.File(app.filesDir, LitehubApp.PREVIOUS_CONFIG_FILE)
+                val text = previous.readText()
+                if (current.exists()) previous.writeAtomic(current.readText()) else previous.delete()
+                current.writeAtomic(text)
+            }
+            load()
+        }
+    }
+
     private fun reload() {
         admin.close()
         binder?.stop()
@@ -126,6 +151,8 @@ class MainActivity : Activity() {
         val theme = screen.theme
         this.theme = theme
         admin.notice = (screen as? Screen.Failed)?.reason
+        ready = screen as? Screen.Ready
+        admin.canEdit = ready != null
         binder?.stop()
         binder = null
         pager = null

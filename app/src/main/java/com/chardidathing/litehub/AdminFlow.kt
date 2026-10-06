@@ -24,12 +24,17 @@ class AdminFlow(
     private val container: FrameLayout,
     private val scope: CoroutineScope,
     private val onReload: () -> Unit,
+    private val onEdit: () -> Unit,
+    private val onRestore: () -> Unit,
 ) {
 
     private var overlay: View? = null
     private var theme: ResolvedTheme? = null
     // set when the dashboard couldn't run, shown under the menu title
     var notice: String? = null
+
+    // edit layout needs a dashboard that loaded
+    var canEdit = false
 
     private val idle = Runnable { close() }
 
@@ -62,7 +67,10 @@ class AdminFlow(
     private fun menu() {
         val t = theme ?: return
         val hasPin = app.settings.pin != null
+        val previous = java.io.File(app.filesDir, LitehubApp.PREVIOUS_CONFIG_FILE).exists()
         val items = buildList {
+            if (canEdit) add("edit layout" to { close(); onEdit() })
+            if (previous) add("restore previous layout" to { close(); onRestore() })
             add("reload" to onReload)
             add((if (hasPin) "change pin" else "set pin") to ::newPin)
             if (hasPin) add("remove pin" to ::removePin)
