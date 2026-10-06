@@ -7,6 +7,7 @@
     "error": "#b00020", "onPrimary": "#ffffff", "onSecondary": "#000000",
     "onBackground": "#000000", "onSurface": "#000000", "onError": "#ffffff"
   },
+  "palette": ["#6200ee", "#03dac6", "#f44336"],
   "spacing": { "xs": 4, "s": 8, "m": 16, "l": 24, "xl": 32 },
   "radii": { "small": 4, "medium": 4, "large": 0 },
   "iconSize": 32,

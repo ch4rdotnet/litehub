@@ -22,6 +22,8 @@ data class Theme(
     val id: String,
     val name: String,
     val colors: Colors,
+    // categorical colours handed out to calendars (and the like) by position
+    val palette: List<Argb>,
     val spacing: Spacing,
     val radii: Radii,
     // dp, square

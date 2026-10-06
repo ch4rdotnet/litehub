@@ -12,6 +12,8 @@ class ResolvedTheme(theme: Theme, metrics: DisplayMetrics, fonts: Fonts, lowTier
 
     val colors: Colors = theme.colors
 
+    val palette: List<Int> = theme.palette
+
     val spacing = Spacing(
         xs = dp(theme.spacing.xs, metrics),
         s = dp(theme.spacing.s, metrics),

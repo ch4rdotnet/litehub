@@ -16,12 +16,21 @@ object Presets {
     // md2 shape defaults, large is 0 on purpose
     private val radii = Radii(small = 4f, medium = 4f, large = 0f)
 
-    // md2 type scale, light (300) falls back to the nearest bundled weight
     // md2 says 24, a wall panel is read from further away
     private val iconSize = 32f
 
     private val motion = Motion(animations = true, pageSettleMs = 250)
 
+    // md2 palette, 500s on light and 200s on dark so they read against either surface
+    private val paletteLight = listOf(
+        0xFF6200EE, 0xFF03DAC6, 0xFFF44336, 0xFFFF9800, 0xFF4CAF50, 0xFF2196F3, 0xFFE91E63, 0xFF795548,
+    ).map { it.toInt() }
+
+    private val paletteDark = listOf(
+        0xFFBB86FC, 0xFF03DAC6, 0xFFEF9A9A, 0xFFFFCC80, 0xFFA5D6A7, 0xFF90CAF9, 0xFFF48FB1, 0xFFBCAAA4,
+    ).map { it.toInt() }
+
+    // md2 type scale, light (300) falls back to the nearest bundled weight
     private val type = TypeScale(
         h1 = TextStyle(size = 96f, weight = 300),
         h2 = TextStyle(size = 60f, weight = 300),
@@ -56,6 +65,7 @@ object Presets {
             onSurface = 0xFF000000.toInt(),
             onError = 0xFFFFFFFF.toInt(),
         ),
+        palette = paletteLight,
         spacing = spacing,
         radii = radii,
         iconSize = iconSize,
@@ -82,6 +92,7 @@ object Presets {
             onSurface = 0xFFFFFFFF.toInt(),
             onError = 0xFF000000.toInt(),
         ),
+        palette = paletteDark,
         spacing = spacing,
         radii = radii,
         iconSize = iconSize,
