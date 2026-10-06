@@ -66,6 +66,8 @@ class LitehubApp : Application() {
 
     val dlna by lazy { DlnaHost(this) }
 
+    val status by lazy { HubStatus(this) }
+
     // what's on screen, for the status page
     data class HubState(val dashboard: String = "", val page: Int = 1, val screenOn: Boolean = true)
 

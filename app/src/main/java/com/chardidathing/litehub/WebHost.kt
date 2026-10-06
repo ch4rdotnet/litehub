@@ -2,11 +2,8 @@ package com.chardidathing.litehub
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.os.Debug
 import android.os.Handler
 import android.os.Looper
-import android.os.Process
-import android.os.SystemClock
 import com.chardidathing.litehub.core.config.ConfigCodec
 import com.chardidathing.litehub.core.config.ConfigException
 import com.chardidathing.litehub.core.config.SettingsForm
@@ -24,7 +21,6 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.add
-import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
@@ -33,10 +29,8 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
 import java.lang.ref.WeakReference
-import java.time.Instant
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
-import kotlin.math.roundToInt
 
 // the hub's side of the web editor and status page. runs for the life of the process so the
 // status page answers while the dashboard is behind another app, the activity plugs in when up
@@ -46,8 +40,6 @@ class WebHost(private val app: LitehubApp) : HubAccess {
     private var port = 0
     private var activity = WeakReference<MainActivity>(null)
     private val main = Handler(Looper.getMainLooper())
-    private var lastCpuMs = Process.getElapsedCpuTime()
-    private var lastWallMs = SystemClock.elapsedRealtime()
 
     fun attach(a: MainActivity) {
         activity = WeakReference(a)
@@ -157,53 +149,7 @@ class WebHost(private val app: LitehubApp) : HubAccess {
         return png
     }
 
-    override suspend fun status(): String {
-        val nowWall = SystemClock.elapsedRealtime()
-        val nowCpu = Process.getElapsedCpuTime()
-        // cpu since the last time someone asked, the whole run the first time
-        val cpu = if (nowWall > lastWallMs) (nowCpu - lastCpuMs) * PERCENT / (nowWall - lastWallMs).toDouble() else 0.0
-        lastWallMs = nowWall
-        lastCpuMs = nowCpu
-        val memory = Debug.MemoryInfo().also(Debug::getMemoryInfo)
-        val uptimeS = (nowWall - Process.getStartElapsedRealtime()) / MS_PER_S
-        val state = app.hubState
-        val calendars = app.calendars.snapshot.value.status
-        val feeds = app.feeds.snapshot.value.status
-        val names = app.sources.getOrNull()
-        val latency = app.ha.latencyMs()
-        return buildJsonObject {
-            put("version", BuildConfig.VERSION_NAME)
-            put("uptime_s", uptimeS)
-            put("uptime", "${uptimeS / S_PER_H}h ${uptimeS % S_PER_H / S_PER_M}m")
-            put("active_dashboard", state.dashboard)
-            put("page", state.page)
-            put("screen_on", state.screenOn)
-            put("memory_mb", (memory.totalPss / KB_PER_MB.toDouble() * TENTHS).roundToInt() / TENTHS)
-            put("cpu_percent", (cpu * TENTHS).roundToInt() / TENTHS)
-            putJsonObject("home_assistant") {
-                put("state", app.ha.statusText())
-                put("latency_ms", latency)
-                put("companion", app.settings.companion?.name)
-            }
-            putJsonArray("calendars") {
-                for (c in names?.calendars.orEmpty()) addJsonObject {
-                    put("id", c.id)
-                    put("name", c.name)
-                    put("last_good", calendars[c.id]?.lastGood?.let { Instant.ofEpochMilli(it).toString() })
-                    put("error", calendars[c.id]?.error)
-                }
-            }
-            putJsonArray("feeds") {
-                for (f in names?.feeds.orEmpty()) addJsonObject {
-                    put("id", f.id)
-                    put("name", f.name)
-                    put("last_good", feeds[f.id]?.lastGood?.let { Instant.ofEpochMilli(it).toString() })
-                    put("error", feeds[f.id]?.error)
-                }
-            }
-            putJsonArray("log") { AppLog.recent().forEach { add(JsonPrimitive(it)) } }
-        }.toString()
-    }
+    override suspend fun status(): String = app.status.snapshot().toString()
 
     override fun themeCss(): String {
         val t: Theme = app.currentTheme ?: Presets.fallbackDark
@@ -243,11 +189,5 @@ class WebHost(private val app: LitehubApp) : HubAccess {
         const val PREVIEW_SCALE = 2
         const val PREVIEW_WAIT_MS = 2_000L
         const val PNG_QUALITY = 100
-        const val PERCENT = 100
-        const val TENTHS = 10.0
-        const val KB_PER_MB = 1024
-        const val MS_PER_S = 1000L
-        const val S_PER_M = 60
-        const val S_PER_H = 3600
     }
 }
