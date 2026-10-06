@@ -1,6 +1,9 @@
 package com.chardidathing.litehub.core.model
 
+import kotlinx.serialization.Serializable
+
 // conditions use ha's names (sunny, partlycloudy, rainy...), open-meteo codes are mapped onto them
+@Serializable
 data class Weather(
     val condition: String,
     val temperature: Double?,
@@ -12,6 +15,7 @@ data class Weather(
 )
 
 // one hour or one day. low is only set for days
+@Serializable
 data class Forecast(
     val timeMs: Long,
     val condition: String,
