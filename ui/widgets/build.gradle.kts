@@ -4,14 +4,10 @@ plugins {
 
 android {
     namespace = "com.chardidathing.litehub.ui.widgets"
-    compileSdk {
-        version = release(36) {
-            minorApiLevel = 1
-        }
-    }
+    compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {
-        minSdk = 28
+        minSdk = libs.versions.minSdk.get().toInt()
     }
 
     compileOptions {

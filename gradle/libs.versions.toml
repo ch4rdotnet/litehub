@@ -1,4 +1,7 @@
 [versions]
+compileSdk = "37"
+minSdk = "28"
+targetSdk = "36"
 agp = "9.1.1"
 # matches the kotlin gradle plugin agp 9.1 ships with
 kotlin = "2.2.10"
