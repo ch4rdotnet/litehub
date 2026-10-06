@@ -10,6 +10,7 @@ import com.chardidathing.litehub.source.fetch.RefreshLoop
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
@@ -51,6 +52,12 @@ class FeedRepository(
     fun start() = loop.start()
 
     fun stop() = loop.stop()
+
+    // for good, a reload builds a new repository
+    fun close() {
+        scope.cancel()
+        store.close()
+    }
 
     private suspend fun refresh(id: String): Boolean {
         val source = byId[id] ?: return true

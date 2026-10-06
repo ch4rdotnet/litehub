@@ -6,6 +6,7 @@ import com.chardidathing.litehub.core.model.EntitySnapshot
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -59,8 +60,18 @@ class EntityRepository(
 
     // network starts here and never before, so startup stays offline until the first frame
     fun connect() {
+        if (started) return
+        started = true
         client?.start()
     }
+
+    // drops the connection for good, a reload builds a new repository
+    fun close() {
+        scope.cancel()
+        cache.close()
+    }
+
+    private var started = false
 
     fun snapshot(id: String): StateFlow<EntitySnapshot> =
         flows[id] ?: flows.computeIfAbsent(id) { MutableStateFlow(EntitySnapshot.Connecting) }
