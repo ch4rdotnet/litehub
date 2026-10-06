@@ -44,7 +44,7 @@ class DashboardLoader(private val app: LitehubApp) {
     // external folder and moved in here. the external copy goes, other apps can read it on old android
     private fun importDropped() {
         val dropbox = app.getExternalFilesDir(null) ?: return
-        for (name in listOf(LitehubApp.HA_FILE, LitehubApp.CONFIG_FILE)) {
+        for (name in listOf(LitehubApp.HA_FILE, LitehubApp.CONFIG_FILE, LitehubApp.SOURCES_FILE)) {
             val dropped = File(dropbox, name).takeIf { it.exists() } ?: continue
             val partial = File(app.filesDir, "$name.partial")
             dropped.copyTo(partial, overwrite = true)

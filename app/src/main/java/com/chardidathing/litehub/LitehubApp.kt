@@ -27,5 +27,6 @@ class LitehubApp : Application() {
     companion object {
         const val HA_FILE = "ha.json"
         const val CONFIG_FILE = "config.json"
+        const val SOURCES_FILE = "sources.json"
     }
 }

@@ -257,3 +257,4 @@ fabric.properties
 
 # local home assistant credentials, pushed to devices with adb, never committed
 /ha.json
+/sources.json
