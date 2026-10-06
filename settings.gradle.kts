@@ -26,6 +26,7 @@ rootProject.name = "litehub"
 include(":app")
 include(":core:model")
 include(":core:config")
+include(":source:ha")
 include(":ui:tokens")
 include(":ui:components")
 include(":ui:widgets")
