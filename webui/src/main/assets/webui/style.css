@@ -52,7 +52,10 @@ aside img { width: 100%; border-radius: var(--radius); background: var(--surface
 #settings-form label { display: block; margin: var(--space-s) 0; }
 #settings-form input:not([type=checkbox]), #settings-form select { display: block; width: 100%; max-width: var(--editor-field); }
 #settings-form label.toggle { display: flex; gap: var(--space-s); align-items: center; }
-#tab-connections label { display: block; margin: var(--space-s) 0; }
-#tab-connections input { width: 100%; max-width: var(--editor-field); }
+.swatches { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-s); }
+.swatches .swatch { width: var(--control); height: var(--control); padding: 0; }
+.swatches .swatch.on { outline: var(--space-xs) solid var(--on-background); }
+#settings-form .swatches input { display: inline-block; width: auto; flex: 1; }
+#settings-form .item { display: block; width: 100%; max-width: var(--editor-field); text-align: left; margin: var(--space-s) 0; }
 /* css variables can't be used in a media query, so the one breakpoint stays here */
 @media (max-width: 900px) { .split, .settings { grid-template-columns: 1fr; } }

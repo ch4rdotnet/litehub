@@ -9,13 +9,13 @@ import android.os.Process
 import android.os.SystemClock
 import com.chardidathing.litehub.core.config.ConfigCodec
 import com.chardidathing.litehub.core.config.ConfigException
-import com.chardidathing.litehub.core.config.DeviceForm
+import com.chardidathing.litehub.core.config.SettingsForm
+import com.chardidathing.litehub.core.model.Hex
 import com.chardidathing.litehub.core.model.SettingsSection
 import kotlinx.serialization.json.JsonObject
 import com.chardidathing.litehub.core.config.SourcesCodec
 import com.chardidathing.litehub.core.model.Theme
 import com.chardidathing.litehub.core.model.WidgetSchema
-import com.chardidathing.litehub.source.ha.HaCredentials
 import com.chardidathing.litehub.ui.tokens.Presets
 import com.chardidathing.litehub.ui.widgets.WidgetSchemas
 import com.chardidathing.litehub.webui.HubAccess
@@ -104,40 +104,25 @@ class WebHost(private val app: LitehubApp) : HubAccess {
         return if (file.exists()) file.readText() else """{ "version": ${SourcesCodec.VERSION}, "calendars": [], "feeds": [] }"""
     }
 
-    override fun saveSources(text: String): Result<Unit> = validated {
-        SourcesCodec.decode(text)
-        File(app.filesDir, LitehubApp.SOURCES_FILE).writeAtomic(text)
-        AppLog.add("sources saved from the web editor")
-        onActivity { it.reload() }
-    }
-
-    override fun ha(): String {
-        val current = HaCredentials.load(File(app.filesDir, LitehubApp.HA_FILE)).getOrNull()
-        return buildJsonObject {
-            put("url", current?.url)
-            put("tokenSet", current != null && current.token.isNotEmpty())
-        }.toString()
-    }
-
-    override fun saveHa(url: String, token: String?): Result<Unit> = validated {
-        val existing = HaCredentials.load(File(app.filesDir, LitehubApp.HA_FILE)).getOrNull()
-        val next = HaCredentials(url.trim(), token ?: existing?.token ?: throw IOException("a token is needed the first time"))
-        File(app.filesDir, LitehubApp.HA_FILE).writeAtomic(Json.encodeToString(HaCredentials.serializer(), next))
-        AppLog.add("home assistant connection changed from the web editor")
-        onActivity { it.reload() }
-    }
-
     override fun settings(): String = buildJsonObject {
-        put("sections", Json.encodeToJsonElement(ListSerializer(SettingsSection.serializer()), DeviceForm.sections))
-        put("values", DeviceForm.values(app.settings))
+        put("sections", Json.encodeToJsonElement(ListSerializer(SettingsSection.serializer()), SettingsForm.sections))
+        put("values", SettingsForm.values(app.hubSettings()))
+        // what "add a calendar" starts from, so the defaults live in one place
+        putJsonObject("newItems") { SettingsForm.sections.filter { it.items != null }.forEach { put(it.id, SettingsForm.newItem(it.id)) } }
+        // the swatches a calendar colour offers, the same ones the device shows
+        putJsonArray("palette") { (app.currentTheme ?: Presets.fallbackDark).palette.distinct().forEach { add(JsonPrimitive(Hex.of(it))) } }
     }.toString()
 
     override fun saveSettings(text: String): Result<Unit> = validated {
         val edits = runCatching { Json.parseToJsonElement(text) }.getOrNull() as? JsonObject
             ?: throw ConfigException("expected a json object of settings")
-        app.updateSettings(DeviceForm.apply(app.settings, edits))
+        val before = app.hubSettings()
+        val reload = app.saveAll(before, SettingsForm.apply(before, edits))
         AppLog.add("settings saved from the web editor")
+        if (reload) onActivity { it.reload() }
     }
+
+    override suspend fun settingsAction(id: String): Result<String> = app.settingsAction(id).map { it.toString() }
 
     override fun schemas(): String = Json.encodeToString(ListSerializer(WidgetSchema.serializer()), WidgetSchemas.all)
 
@@ -224,7 +209,7 @@ class WebHost(private val app: LitehubApp) : HubAccess {
         val t: Theme = app.currentTheme ?: Presets.fallbackDark
         val c = t.colors
         val metrics = app.resources.displayMetrics
-        fun hex(argb: Int) = "#%06x".format(argb and RGB)
+        fun hex(argb: Int) = Hex.of(argb)
         return buildString {
             append(":root {\n")
             append("  --background: ${hex(c.background)};\n  --surface: ${hex(c.surface)};\n")
@@ -258,7 +243,6 @@ class WebHost(private val app: LitehubApp) : HubAccess {
         const val PREVIEW_SCALE = 2
         const val PREVIEW_WAIT_MS = 2_000L
         const val PNG_QUALITY = 100
-        const val RGB = 0xFFFFFF
         const val PERCENT = 100
         const val TENTHS = 10.0
         const val KB_PER_MB = 1024

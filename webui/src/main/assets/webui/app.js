@@ -35,8 +35,8 @@ async function start() {
   $("app").hidden = false;
   dash = Math.max(0, config.dashboards.findIndex((d) => d.id === config.activeDashboard));
   $("add-type").innerHTML = schemas.map((s) => `<option value="${s.type}">${s.name}</option>`).join("");
-  loadConnections();
   loadSettings();
+  api("/api/sources").then((t) => { sources = JSON.parse(t); }).catch(() => {});
   api("/api/entities").then((t) => { entities = JSON.parse(t); drawSettings(); }).catch(() => {});
   render();
   refreshPreview();
@@ -148,6 +148,9 @@ function field(f, values) {
   if (f.kind === "choice") return `<label>${label}<select name="${f.key}">` +
     f.options.map((o) => `<option value="${o.value}" ${o.value === v ? "selected" : ""}>${o.label}</option>`).join("") + `</select></label>`;
   if (f.kind === "number") return `<label>${label}<input name="${f.key}" type="number" step="any" min="${f.min ?? ""}" max="${f.max ?? ""}" value="${value}"></label>`;
+  if (f.kind === "color") return `<label>${label}</label><div class="swatches"><button type="button" data-c="">auto</button>` +
+    (hubSettings?.palette || []).map((c) => `<button type="button" class="swatch" data-c="${c}" style="background: ${c}"></button>`).join("") +
+    `<input name="${f.key}" value="${value}" placeholder="#rrggbb"></div>`;
   if (f.kind === "time") return `<label>${label}<input name="${f.key}" type="time" value="${value}"></label>`;
   if (f.kind === "secret") return `<label>${label}<input name="${f.key}" type="password" autocomplete="off" placeholder="leave blank to keep it"></label>`;
   if (f.kind !== "entity" && f.kind !== "entities") return `<label>${label}<input name="${f.key}" value="${value}"></label>`;
@@ -170,13 +173,15 @@ function readField(form, f) {
 }
 
 // the hub's own settings, the same sections and fields as its settings screen. edits are kept
-// across sections until save or cancel, the hub checks them the same way the screen does
-let hubSettings = null, settingsEdits = {}, settingsSection = 0;
+// across sections until save or cancel, the hub checks them the same way the screen does.
+// a list section (calendars) edits one item at a time, done puts it back in the list
+let hubSettings = null, settingsEdits = {}, settingsSection = 0, editingItem = null;
 
 async function loadSettings() {
   try {
     hubSettings = JSON.parse(await api("/api/settings"));
-    settingsEdits = { ...hubSettings.values };
+    settingsEdits = structuredClone(hubSettings.values);
+    editingItem = null;
     drawSettingsSections();
   } catch (e) { say("settings-message", e.message, true); }
 }
@@ -184,24 +189,83 @@ async function loadSettings() {
 function drawSettingsSections() {
   const list = $("settings-sections");
   list.innerHTML = hubSettings.sections.map((s, i) => `<button type="button" data-i="${i}" class="${i === settingsSection ? "on" : ""}">${s.name}</button>`).join("");
-  list.querySelectorAll("button").forEach((b) => b.onclick = () => { settingsSection = Number(b.dataset.i); drawSettingsSections(); });
+  list.querySelectorAll("button").forEach((b) => b.onclick = () => { settingsSection = Number(b.dataset.i); editingItem = null; drawSettingsSections(); });
   drawSettingsFields();
 }
 
 const shownWith = (f, values) => Object.entries(f.showIf || {}).every(([k, want]) => String(values[k]) === want);
 
-function drawSettingsFields() {
-  const section = hubSettings.sections[settingsSection], form = $("settings-form");
-  form.innerHTML = `<h2>${section.name}</h2>` + section.fields.map((f) => `<div data-key="${f.key}">${field(f, settingsEdits)}</div>`).join("");
-  const refresh = () => section.fields.forEach((f) => { form.querySelector(`[data-key="${f.key}"]`).hidden = !shownWith(f, settingsEdits); });
+// fields over one object of values, kept in step as they're edited, hidden ones come and go
+function bindFields(form, fields, values) {
+  form.innerHTML += fields.map((f) => `<div data-key="${f.key}">${field(f, values)}</div>`).join("");
+  const refresh = () => {
+    fields.forEach((f) => { form.querySelector(`[data-key="${f.key}"]`).hidden = !shownWith(f, values); });
+    form.querySelectorAll(".swatches").forEach((box) => {
+      const typed = box.querySelector("input").value.trim().toLowerCase();
+      box.querySelectorAll("[data-c]").forEach((b) => b.classList.toggle("on", b.dataset.c === typed));
+    });
+  };
   form.oninput = form.onchange = () => {
-    for (const f of section.fields) {
+    for (const f of fields) {
       const v = readField(form, f);
-      if (v === undefined) delete settingsEdits[f.key]; else settingsEdits[f.key] = v;
+      if (v === undefined) delete values[f.key]; else values[f.key] = v;
     }
     refresh();
   };
+  // a swatch fills the colour box beside it
+  form.onclick = (e) => {
+    const b = e.target.closest("[data-c]");
+    if (!b) return;
+    b.parentElement.querySelector("input").value = b.dataset.c;
+    form.oninput();
+  };
   refresh();
+}
+
+function drawSettingsFields() {
+  const section = hubSettings.sections[settingsSection], form = $("settings-form");
+  $("settings-save").hidden = $("settings-cancel").hidden = editingItem !== null;
+  if (editingItem !== null) return drawItem(section);
+  form.innerHTML = `<h2>${section.name}</h2>`;
+  // empty lists aren't sent, a list section has no fields of its own
+  bindFields(form, section.fields || [], settingsEdits);
+  if (section.items) {
+    const items = settingsEdits[section.id] || [];
+    form.insertAdjacentHTML("beforeend", (items.length ? "" : `<p class="muted">no ${section.name} yet</p>`) +
+      items.map((it, i) => `<button type="button" class="item" data-item="${i}">${it.name || "unnamed " + section.itemName}</button>`).join("") +
+      `<div class="bar"><button type="button" data-item="-1">add a ${section.itemName}</button></div>`);
+    form.querySelectorAll("[data-item]").forEach((b) => b.onclick = () => { editingItem = Number(b.dataset.item); drawSettingsFields(); });
+  }
+  if (section.actions?.length) {
+    form.insertAdjacentHTML("beforeend", `<div class="bar">` + section.actions.map((a) => `<button type="button" data-action="${a.value}">${a.label}</button>`).join("") + `</div>`);
+    form.querySelectorAll("[data-action]").forEach((b) => b.onclick = () => runAction(b.dataset.action));
+  }
+}
+
+function drawItem(section) {
+  const form = $("settings-form"), items = settingsEdits[section.id] || [];
+  const item = structuredClone(editingItem >= 0 ? items[editingItem] : hubSettings.newItems[section.id]);
+  form.innerHTML = `<h2>${item.name || "new " + section.itemName}</h2>`;
+  bindFields(form, section.items, item);
+  form.insertAdjacentHTML("beforeend", `<div class="bar"><button type="button" id="item-done" class="primary">done</button>` +
+    (editingItem >= 0 ? `<button type="button" id="item-remove">remove</button>` : "") + `<button type="button" id="item-back">back</button></div>`);
+  const close = () => { editingItem = null; drawSettingsFields(); };
+  $("item-done").onclick = () => {
+    const next = [...items];
+    if (editingItem >= 0) next[editingItem] = item; else next.push(item);
+    settingsEdits[section.id] = next;
+    close();
+  };
+  if (editingItem >= 0) $("item-remove").onclick = () => { settingsEdits[section.id] = items.filter((_, i) => i !== editingItem); close(); };
+  $("item-back").onclick = close;
+}
+
+async function runAction(id) {
+  try {
+    Object.assign(settingsEdits, JSON.parse(await api("/api/settings/action", { method: "POST", body: id })));
+    say("settings-message", "", false);
+    drawSettingsFields();
+  } catch (e) { say("settings-message", e.message, true); }
 }
 
 $("settings-save").onclick = async () => {
@@ -209,10 +273,11 @@ $("settings-save").onclick = async () => {
     await api("/api/settings", { method: "PUT", body: JSON.stringify(settingsEdits) });
     say("settings-message", "saved, the hub uses it straight away", false);
     loadSettings();
+    sources = JSON.parse(await api("/api/sources"));
   } catch (e) { say("settings-message", e.message, true); }
 };
 $("settings-cancel").onclick = () => {
-  settingsEdits = { ...hubSettings.values };
+  settingsEdits = structuredClone(hubSettings.values);
   say("settings-message", "", false);
   drawSettingsFields();
 };
@@ -289,35 +354,6 @@ $("import").onchange = async (e) => {
   if (!file) return;
   $("json").value = await file.text();
   save($("json").value, "json-message");
-};
-
-async function loadConnections() {
-  try {
-    const ha = JSON.parse(await api("/api/ha"));
-    $("ha-url").value = ha.url || "";
-    $("ha-token").placeholder = ha.tokenSet ? "set, leave empty to keep it" : "not set";
-    const text = await api("/api/sources");
-    $("sources").value = text;
-    sources = JSON.parse(text);
-  } catch (e) { say("ha-message", e.message, true); }
-}
-
-$("ha-form").onsubmit = async (e) => {
-  e.preventDefault();
-  try {
-    await api("/api/ha", { method: "PUT", body: JSON.stringify({ url: $("ha-url").value, token: $("ha-token").value }) });
-    $("ha-token").value = "";
-    say("ha-message", "saved, the hub reconnects with it", false);
-    loadConnections();
-  loadSettings();
-  } catch (e) { say("ha-message", e.message, true); }
-};
-$("sources-save").onclick = async () => {
-  try {
-    await api("/api/sources", { method: "PUT", body: $("sources").value });
-    sources = JSON.parse($("sources").value);
-    say("sources-message", "saved, the hub reloads its calendars and feeds", false);
-  } catch (e) { say("sources-message", e.message, true); }
 };
 
 start();

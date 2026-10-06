@@ -13,22 +13,18 @@ interface HubAccess {
     // validated first, the old one is kept as config.prev.json, the dashboard reloads
     fun saveConfig(text: String): Result<Unit>
 
+    // calendars and feeds, the layout editor names them in widget settings
     fun sources(): String
 
-    fun saveSources(text: String): Result<Unit>
-
-    // url and whether a token is set, the token itself never leaves the device
-    fun ha(): String
-
-    // a null token keeps the one already there
-    fun saveHa(url: String, token: String?): Result<Unit>
-
-    // the hub's own settings as the form both settings screens draw, {"sections": [...], "values": {...}}.
-    // secrets come back blank
+    // the hub's own settings as the form both settings screens draw,
+    // {"sections": [...], "values": {...}, "newItems": {...}, "palette": ["#rrggbb", ...]}. secrets come back blank
     fun settings(): String
 
     // flat key to value edits, checked like the device's own settings screen checks them
     fun saveSettings(text: String): Result<Unit>
+
+    // a settings section's button (ha's home location), the values it fills in as json
+    suspend fun settingsAction(id: String): Result<String>
 
     fun schemas(): String
 

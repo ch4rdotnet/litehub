@@ -4,9 +4,6 @@ import android.content.res.AssetManager
 import com.chardidathing.litehub.core.config.Pin
 import fi.iki.elonen.NanoHTTPD
 import kotlinx.coroutines.runBlocking
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 import java.io.ByteArrayInputStream
 import java.io.IOException
 import java.net.InetAddress
@@ -67,17 +64,10 @@ class WebServer(port: Int, private val access: HubAccess, private val assets: As
             get && path == "/api/config" -> json(access.config())
             s.method == NanoHTTPD.Method.PUT && path == "/api/config" -> saved(access.saveConfig(body(s)))
             get && path == "/api/sources" -> json(access.sources())
-            s.method == NanoHTTPD.Method.PUT && path == "/api/sources" -> saved(access.saveSources(body(s)))
             get && path == "/api/settings" -> json(access.settings())
             s.method == NanoHTTPD.Method.PUT && path == "/api/settings" -> saved(access.saveSettings(body(s)))
-            get && path == "/api/ha" -> json(access.ha())
-            s.method == NanoHTTPD.Method.PUT && path == "/api/ha" -> {
-                val params = runCatching { Json.parseToJsonElement(body(s)) }.getOrNull() as? JsonObject
-                    ?: return text(NanoHTTPD.Response.Status.BAD_REQUEST, "expected a json object")
-                val url = (params["url"] as? JsonPrimitive)?.content ?: return text(NanoHTTPD.Response.Status.BAD_REQUEST, "url is needed")
-                val token = (params["token"] as? JsonPrimitive)?.content?.ifBlank { null }
-                saved(access.saveHa(url, token))
-            }
+            s.method == NanoHTTPD.Method.POST && path == "/api/settings/action" -> runBlocking { access.settingsAction(body(s).trim()) }
+                .fold(::json) { text(NanoHTTPD.Response.Status.SERVICE_UNAVAILABLE, it.message ?: "that didn't work") }
             get && path == "/api/entities" -> runBlocking { access.entities() }.fold(::json) { text(NanoHTTPD.Response.Status.SERVICE_UNAVAILABLE, it.message ?: "home assistant isn't reachable") }
             get && path == "/api/preview.png" -> access.preview()?.let {
                 NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "image/png", ByteArrayInputStream(it), it.size.toLong()).apply { addHeader("Cache-Control", "no-store") }

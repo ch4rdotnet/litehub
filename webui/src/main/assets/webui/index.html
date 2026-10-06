@@ -14,7 +14,6 @@
     <button data-tab="layout" class="on">layout</button>
     <button data-tab="json">json</button>
     <button data-tab="settings">settings</button>
-    <button data-tab="connections">connections</button>
     <a href="/status" target="_blank">status</a>
   </nav>
 </header>
@@ -81,20 +80,6 @@
         <p id="settings-message"></p>
       </div>
     </div>
-  </section>
-
-  <section id="tab-connections" class="tab" hidden>
-    <h2>home assistant</h2>
-    <form id="ha-form">
-      <label>url <input id="ha-url" placeholder="http://homeassistant.local:8123"></label>
-      <label>long lived token <input id="ha-token" type="password" autocomplete="off"></label>
-      <button class="primary">save</button>
-    </form>
-    <p id="ha-message"></p>
-    <h2>calendars and feeds (sources.json)</h2>
-    <textarea id="sources" spellcheck="false"></textarea>
-    <div class="bar"><button id="sources-save" class="primary">save</button></div>
-    <p id="sources-message"></p>
   </section>
 </main>
 <script src="/app.js"></script>
