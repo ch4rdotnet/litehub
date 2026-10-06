@@ -57,6 +57,8 @@ object WidgetCatalog {
                 ?: broken(context, theme, "list config isn't valid", "it needs a todo entity")
             "entities" -> decode(placement, EntitiesConfig.serializer())?.let { EntitiesWidget(context, theme, icons, it) }
                 ?: broken(context, theme, "entities config isn't valid", "it takes a list of entity ids")
+            "clock" -> decode(placement, ClockConfig.serializer())?.let { ClockWidget(context, theme, it) }
+                ?: broken(context, theme, "clock config isn't valid", "it only takes whether to show the date")
             "photo" -> decode(placement, PhotoConfig.serializer())?.let { PhotoWidget(context, theme, it) }
                 ?: broken(context, theme, "photo frame config isn't valid", "it only takes seconds per photo")
             "notifications" -> decode(placement, NotificationsConfig.serializer())?.let { NotificationsWidget(context, theme, it) }

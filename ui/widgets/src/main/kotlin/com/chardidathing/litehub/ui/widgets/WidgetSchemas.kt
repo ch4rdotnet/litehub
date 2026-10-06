@@ -68,6 +68,11 @@ object WidgetSchemas {
             description = "lots of entities in one tile, each with its state, tap one to toggle it",
         ),
         WidgetSchema(
+            "clock", "clock", 1, 1,
+            listOf(SchemaField("date", "show the date", FieldKind.TOGGLE, default = JsonPrimitive(ClockConfig().date))),
+            description = "the time, as big as the tile allows, with the date under it",
+        ),
+        WidgetSchema(
             "photo", "photo frame", 1, 1,
             listOf(SchemaField("seconds", "seconds per photo (blank uses the screensaver's)", FieldKind.NUMBER, min = MIN_PHOTO_SECONDS.toDouble())),
             description = "the screensaver's photos in a tile, one fading into the next",

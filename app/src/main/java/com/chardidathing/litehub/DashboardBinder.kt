@@ -7,6 +7,7 @@ import com.chardidathing.litehub.ui.components.WidgetView
 import com.chardidathing.litehub.ui.widgets.CalendarWidget
 import com.chardidathing.litehub.ui.widgets.EntityWidget
 import com.chardidathing.litehub.ui.widgets.EntitiesWidget
+import com.chardidathing.litehub.ui.widgets.ClockWidget
 import com.chardidathing.litehub.ui.widgets.FeedWidget
 import com.chardidathing.litehub.ui.widgets.PhotoWidget
 import com.chardidathing.litehub.ui.widgets.Moment
@@ -96,6 +97,7 @@ class DashboardBinder(
         is EntitiesWidget -> scope.launch {
             for (id in widget.config.entities.distinct()) launch { ha.snapshot(id).collect { widget.show(id, it) } }
         }
+        is ClockWidget -> scope.launch { now.collect(widget::show) }
         is PhotoWidget -> scope.launch {
             val frame = photoFrame().getOrElse {
                 widget.fail(it.message ?: "no photos")
