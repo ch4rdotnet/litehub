@@ -37,7 +37,7 @@ data class Theme(
 
 // animations are opt-in per theme, and low tier devices turn them off regardless
 @Serializable
-data class Motion(val animations: Boolean, val pageSettleMs: Int)
+data class Motion(val animations: Boolean, val pageSettleMs: Int, val crossfadeMs: Int)
 
 // md2 colour roles
 @Serializable

@@ -42,6 +42,12 @@ class TextBlock(private val maxLines: Int = Int.MAX_VALUE) {
             .build()
     }
 
+    // a soft shadow behind the glyphs, for text that sits on photos
+    fun shadow(radius: Float, color: Int) {
+        paint.setShadowLayer(radius, 0f, 0f, color)
+        layout = null
+    }
+
     // single line height for a style, without laying anything out
     fun lineHeight(style: ResolvedTheme.Text): Float {
         paint.textSize = style.size

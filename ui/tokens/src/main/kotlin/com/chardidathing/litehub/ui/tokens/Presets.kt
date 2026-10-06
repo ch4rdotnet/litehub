@@ -23,7 +23,8 @@ object Presets {
     private val touchTarget = 64f
 
     // the longest a page settle may take, a full 1920px page from rest
-    private val motion = Motion(animations = true, pageSettleMs = 300)
+    // a photo frame crossfade is slow on purpose, it should read as calm not as a transition
+    private val motion = Motion(animations = true, pageSettleMs = 300, crossfadeMs = 1500)
 
     // md2 palette, 500s on light and 200s on dark so they read against either surface
     private val paletteLight = listOf(

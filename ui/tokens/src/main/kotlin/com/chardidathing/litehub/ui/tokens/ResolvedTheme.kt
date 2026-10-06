@@ -37,6 +37,8 @@ class ResolvedTheme(theme: Theme, metrics: DisplayMetrics, fonts: Fonts, lowTier
     // zero when animations are off, so callers jump straight to the end state
     val pageSettleMs = if (theme.motion.animations && !lowTier) theme.motion.pageSettleMs else 0
 
+    val crossfadeMs = if (theme.motion.animations && !lowTier) theme.motion.crossfadeMs else 0
+
     val type = with(theme.type) {
         fun r(style: TextStyle) = Text(
             size = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, style.size, metrics),

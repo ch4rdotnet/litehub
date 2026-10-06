@@ -22,5 +22,5 @@
     "button": { "size": 14, "weight": 500 }, "caption": { "size": 12, "weight": 400 },
     "overline": { "size": 10, "weight": 400 }
   },
-  "motion": { "animations": true, "pageSettleMs": 250 }
+  "motion": { "animations": true, "pageSettleMs": 250, "crossfadeMs": 1500 }
 }
