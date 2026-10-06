@@ -13,6 +13,7 @@
   <nav>
     <button data-tab="layout" class="on">layout</button>
     <button data-tab="json">json</button>
+    <button data-tab="themes">themes</button>
     <button data-tab="settings">settings</button>
     <a href="/status" target="_blank">status</a>
   </nav>
@@ -74,6 +75,34 @@
     </div>
     <textarea id="json" spellcheck="false"></textarea>
     <p id="json-message"></p>
+  </section>
+
+  <section id="tab-themes" class="tab" hidden>
+    <h2>dashboard theme</h2>
+    <div class="bar">
+      <label>dashboard <select id="theme-dashboard"></select></label>
+      <label>use <select id="theme-mode">
+        <option value="system">light or dark, following the system</option>
+        <option value="light">always the light theme</option>
+        <option value="dark">always the dark theme</option>
+      </select></label>
+      <label>light <select id="theme-light"></select></label>
+      <label>dark <select id="theme-dark"></select></label>
+    </div>
+    <div class="settings">
+      <div>
+        <div id="theme-list" class="sections"></div>
+        <div class="bar"><button id="theme-new">new theme</button></div>
+      </div>
+      <div>
+        <div id="theme-editor"></div>
+        <div class="bar">
+          <button id="themes-save" class="primary">save to hub</button>
+          <span id="themes-dirty" class="muted"></span>
+        </div>
+        <p id="themes-message"></p>
+      </div>
+    </div>
   </section>
 
   <section id="tab-settings" class="tab" hidden>

@@ -87,6 +87,20 @@ aside img { width: 100%; border-radius: var(--radius); background: var(--surface
 .swatches .swatch.on { outline: var(--space-xs) solid var(--on-background); }
 #settings-form .swatches input { display: inline-block; width: auto; flex: 1; }
 #settings-form .item { display: block; width: 100%; max-width: var(--editor-field); text-align: left; margin: var(--space-s) 0; }
+#tab-themes label { display: inline-flex; flex-direction: column; gap: var(--space-xs); }
+#theme-editor > label { display: flex; max-width: var(--editor-field); margin: var(--space-s) 0; }
+.roles { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--editor-card), 1fr)); gap: var(--space-s); }
+.role { display: flex !important; flex-direction: row !important; align-items: center; gap: var(--space-s); background: var(--surface); border-radius: var(--radius); padding: var(--space-s); }
+.role span { display: flex; flex-direction: column; flex: 1; font-size: var(--body2); }
+.role small { color: var(--primary); }
+.role button { min-height: 0; padding: var(--space-xs) var(--space-s); background: var(--background); font-size: var(--body2); }
+input[type=color] { width: var(--control); height: var(--control); padding: 0; border-radius: var(--radius); cursor: pointer; }
+.preview { display: flex; flex-wrap: wrap; gap: var(--space-m); padding: var(--space-m); margin: var(--space-s) 0; }
+.preview .tile { display: flex; flex-direction: column; gap: var(--space-xs); padding: var(--space-m); min-width: var(--editor-card); }
+.preview .pill { align-self: flex-start; padding: var(--space-xs) var(--space-m); font-size: var(--body2); }
+.preview small { font-size: var(--body2); }
+.dots { display: flex; gap: var(--space-xs); }
+.dots i { width: var(--space-m); height: var(--space-m); border-radius: 50%; }
 /* a tile too narrow for its size label as well as its type name drops the size, the type matters more */
 @container (max-width: 10em) { .size { display: none; } }
 /* css variables can't be used in a media query, so the one breakpoint stays here */

@@ -30,6 +30,7 @@ document.querySelectorAll("header nav button").forEach((b) => b.onclick = () => 
   document.querySelectorAll("header nav button").forEach((x) => x.classList.toggle("on", x === b));
   document.querySelectorAll(".tab").forEach((t) => t.hidden = t.id !== "tab-" + b.dataset.tab);
   if (b.dataset.tab === "json") $("json").value = JSON.stringify(config, null, 2);
+  if (b.dataset.tab === "themes") drawThemes();
 });
 
 async function start() {
@@ -41,6 +42,7 @@ async function start() {
   $("app").hidden = false;
   dash = Math.max(0, config.dashboards.findIndex((d) => d.id === config.activeDashboard));
   loadSettings();
+  api("/api/themes").then((t) => { presets = JSON.parse(t); drawThemes(); }).catch(() => {});
   api("/api/sources").then((t) => { sources = JSON.parse(t); }).catch(() => {});
   api("/api/entities").then((t) => { entities = JSON.parse(t); render(); }).catch(() => {});
   render();
@@ -99,6 +101,7 @@ function render() {
   $("dirty").textContent = dirty() ? "unsaved changes" : "";
   drawGrid();
   drawSettings();
+  if (!$("tab-themes").hidden) drawThemes();
 }
 
 // the layout geometry, all in grid cells
@@ -236,9 +239,12 @@ function nudge(dx, dy, resizing) {
 }
 
 document.addEventListener("keydown", (e) => {
-  if ($("tab-layout").hidden || !config || $("picker").open) return;
+  if (!config || $("picker").open) return;
   const typing = /^(input|textarea|select)$/i.test(e.target.tagName);
   const mod = e.ctrlKey || e.metaKey;
+  // undo works on the themes tab too, everything else here is the layout's
+  if (!$("tab-themes").hidden && mod && e.key.toLowerCase() === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
+  if ($("tab-layout").hidden) return;
   if (mod && e.key.toLowerCase() === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
   if (mod && e.key.toLowerCase() === "y") { e.preventDefault(); redo(); return; }
   if (typing) return;
@@ -533,6 +539,200 @@ $("settings-cancel").onclick = () => {
   drawSettingsFields();
 };
 
+
+// themes. the built in ones come from the hub, the user's own live in config.themes as overrides
+// on top of another theme, so they save, undo and show unsaved changes like the layout does
+let presets = [], themePicked = null, themeDash = null;
+
+const COLOR_ROLES = [
+  ["primary", "primary, buttons and things that are on"], ["onPrimary", "text on primary"],
+  ["background", "background"], ["onBackground", "text on the background"],
+  ["surface", "tiles"], ["onSurface", "text on tiles"],
+  ["error", "errors"], ["onError", "text on errors"],
+  ["secondary", "secondary"], ["onSecondary", "text on secondary"],
+  ["primaryVariant", "primary variant"], ["secondaryVariant", "secondary variant"],
+];
+
+// reading never adds an empty list, that would show as an unsaved change
+const userThemes = () => config.themes || [];
+const addTheme = (t) => (config.themes ||= []).push(t);
+const isPreset = (id) => presets.some((p) => p.id === id);
+const themeIds = () => [...presets.map((p) => p.id), ...userThemes().map((t) => t.id)];
+
+// objects merge key by key, anything else (a colour, the palette) replaces
+function mergeTheme(base, over) {
+  const out = { ...base };
+  for (const [k, v] of Object.entries(over)) {
+    out[k] = v && typeof v === "object" && !Array.isArray(v) && base[k] && typeof base[k] === "object" ? mergeTheme(base[k], v) : v;
+  }
+  return out;
+}
+
+// a theme with everything it inherits filled in, null when its chain is broken
+function resolveTheme(id, seen = new Set()) {
+  const preset = presets.find((p) => p.id === id);
+  if (preset) return preset;
+  const own = userThemes().find((t) => t.id === id);
+  if (!own || seen.has(id)) return null;
+  seen.add(id);
+  const base = resolveTheme(own.extends, seen);
+  if (!base) return null;
+  const { extends: _, ...rest } = own;
+  return mergeTheme(base, { name: own.name || own.id, ...rest });
+}
+
+const themeName = (id) => resolveTheme(id)?.name || id;
+
+// the themes a theme may build on, anything but itself and the ones built on it
+function possibleBases(id) {
+  const leadsTo = (t, target, seen = new Set()) => {
+    if (t === target) return true;
+    const own = userThemes().find((x) => x.id === t);
+    if (!own || seen.has(t)) return false;
+    seen.add(t);
+    return leadsTo(own.extends, target, seen);
+  };
+  return themeIds().filter((t) => !leadsTo(t, id));
+}
+
+function drawThemes() {
+  if (!config || !presets.length) return;
+  if (themeDash === null || themeDash >= config.dashboards.length) themeDash = dash;
+  if (!themePicked || !themeIds().includes(themePicked)) themePicked = config.dashboards[themeDash].theme.dark;
+  const d = config.dashboards[themeDash];
+  const options = (chosen) => themeIds().map((id) => `<option value="${esc(id)}" ${id === chosen ? "selected" : ""}>${esc(themeName(id))}</option>`).join("");
+  $("theme-dashboard").innerHTML = config.dashboards.map((x, i) => `<option value="${i}" ${i === themeDash ? "selected" : ""}>${esc(x.name)}</option>`).join("");
+  $("theme-mode").value = d.theme.mode;
+  $("theme-light").innerHTML = options(d.theme.light);
+  $("theme-dark").innerHTML = options(d.theme.dark);
+  $("theme-list").innerHTML = themeIds().map((id) =>
+    `<button type="button" data-theme="${esc(id)}" class="${id === themePicked ? "on" : ""}">${esc(themeName(id))}${isPreset(id) ? " (built in)" : ""}</button>`).join("");
+  $("theme-list").querySelectorAll("[data-theme]").forEach((b) => b.onclick = () => { themePicked = b.dataset.theme; drawThemes(); });
+  $("themes-dirty").textContent = dirty() ? "unsaved changes" : "";
+  drawThemeEditor();
+}
+
+function drawThemeEditor() {
+  const box = $("theme-editor"), id = themePicked, t = resolveTheme(id);
+  delete box.dataset.remembered;
+  if (!t) { box.innerHTML = `<p class="error">${esc(id)} builds on a theme that isn't there</p>`; return; }
+  const own = userThemes().find((x) => x.id === id);
+  const preview = themePreview(t);
+  if (!own) {
+    box.innerHTML = `<h2>${esc(t.name)}</h2><p class="muted">built in, duplicate it to make your own version</p>${preview}` +
+      `<div class="bar"><button type="button" id="theme-copy">duplicate</button></div>`;
+    $("theme-copy").onclick = () => copyTheme(id);
+    return;
+  }
+  const colors = own.colors || {};
+  box.innerHTML = `<h2>${esc(t.name)}</h2>${preview}` +
+    `<label>name<input id="theme-name" value="${esc(own.name || "")}" placeholder="${esc(own.id)}"></label>` +
+    `<label>builds on<select id="theme-base">${possibleBases(id).map((b) => `<option value="${esc(b)}" ${b === own.extends ? "selected" : ""}>${esc(themeName(b))}</option>`).join("")}</select></label>` +
+    `<h2>colours</h2><div class="roles">` + COLOR_ROLES.map(([key, label]) =>
+      `<label class="role"><input type="color" data-role="${key}" value="${t.colors[key].slice(-6).padStart(7, "#")}">` +
+      `<span>${label}<small>${colors[key] ? "this theme's own" : "from " + esc(themeName(own.extends))}</small></span>` +
+      (colors[key] ? `<button type="button" data-reset="${key}">use inherited</button>` : "") + `</label>`).join("") + `</div>` +
+    `<h2>palette</h2><p class="muted">calendars set to auto take these in order</p><div class="swatches">` +
+    t.palette.map((c, i) => `<span class="chip"><input type="color" data-palette="${i}" value="${c.slice(-6).padStart(7, "#")}"><button type="button" data-unpalette="${i}">×</button></span>`).join("") +
+    `<button type="button" id="palette-add">add a colour</button>${own.palette ? `<button type="button" id="palette-reset">use inherited</button>` : ""}</div>` +
+    `<div class="bar"><button type="button" id="theme-copy">duplicate</button><button type="button" id="theme-delete">delete</button></div>` +
+    `<p class="muted">fonts, sizes, spacing and motion can be changed in the json tab, under themes</p>`;
+  // one undo step per visit to the editor, not one per colour dragged through
+  box.onfocusin = () => { if (!box.dataset.remembered) { remember(); box.dataset.remembered = "1"; } };
+  const changed = () => { drawThemeList(); $("themes-dirty").textContent = dirty() ? "unsaved changes" : ""; box.querySelector(".preview").outerHTML = themePreview(resolveTheme(id)); };
+  $("theme-name").oninput = (e) => { if (e.target.value.trim()) own.name = e.target.value.trim(); else delete own.name; changed(); };
+  $("theme-base").onchange = (e) => { own.extends = e.target.value; drawThemes(); };
+  box.querySelectorAll("[data-role]").forEach((input) => input.oninput = () => {
+    own.colors = { ...(own.colors || {}), [input.dataset.role]: input.value };
+    changed();
+    input.closest(".role").querySelector("small").textContent = "this theme's own";
+  });
+  box.querySelectorAll("[data-role]").forEach((input) => input.onchange = () => drawThemeEditor());
+  box.querySelectorAll("[data-reset]").forEach((b) => b.onclick = () => {
+    remember();
+    delete own.colors[b.dataset.reset];
+    if (!Object.keys(own.colors).length) delete own.colors;
+    drawThemes();
+  });
+  const palette = () => [...box.querySelectorAll("[data-palette]")].map((i) => i.value);
+  box.querySelectorAll("[data-palette]").forEach((input) => input.oninput = () => { own.palette = palette(); changed(); });
+  box.querySelectorAll("[data-unpalette]").forEach((b) => b.onclick = () => {
+    const list = palette();
+    if (list.length < 2) return say("themes-message", "a palette needs at least one colour", true);
+    remember();
+    own.palette = list.filter((_, i) => i !== Number(b.dataset.unpalette));
+    drawThemes();
+  });
+  $("palette-add").onclick = () => { remember(); own.palette = [...palette(), t.colors.primary]; drawThemes(); };
+  if (own.palette) $("palette-reset").onclick = () => { remember(); delete own.palette; drawThemes(); };
+  $("theme-copy").onclick = () => copyTheme(id);
+  $("theme-delete").onclick = () => deleteTheme(id);
+}
+
+function drawThemeList() {
+  $("theme-list").querySelectorAll("[data-theme]").forEach((b) => {
+    b.textContent = themeName(b.dataset.theme) + (isPreset(b.dataset.theme) ? " (built in)" : "");
+  });
+}
+
+// a few tiles in the theme's own colours, so a change shows before it's saved
+function themePreview(t) {
+  const c = t.colors, r = t.radii.medium + "px";
+  return `<div class="preview" style="background: ${c.background}; color: ${c.onBackground}; border-radius: ${r}">` +
+    `<div class="tile" style="background: ${c.surface}; color: ${c.onSurface}; border-radius: ${r}">` +
+    `<span style="color: ${c.primary}">●</span> lounge lamp<small>on, 80%</small></div>` +
+    `<div class="tile" style="background: ${c.surface}; color: ${c.onSurface}; border-radius: ${r}">notifications` +
+    `<span class="pill" style="background: ${c.primary}; color: ${c.onPrimary}; border-radius: ${r}">clear all</span>` +
+    `<small style="color: ${c.error}">couldn't reach the calendar</small></div>` +
+    `<div class="tile" style="background: ${c.surface}; color: ${c.onSurface}; border-radius: ${r}">calendars<span class="dots">` +
+    t.palette.map((p) => `<i style="background: ${p}"></i>`).join("") + `</span></div></div>`;
+}
+
+function newThemeId(name) {
+  return uniqueId(themeIds(), name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "theme");
+}
+
+function copyTheme(id) {
+  const name = themeName(id) + " copy";
+  const own = userThemes().find((t) => t.id === id);
+  remember();
+  const copy = own ? { ...structuredClone(own), id: newThemeId(name), name } : { id: newThemeId(name), name, extends: id };
+  addTheme(copy);
+  themePicked = copy.id;
+  drawThemes();
+}
+
+function deleteTheme(id) {
+  const users = config.dashboards.filter((d) => d.theme.light === id || d.theme.dark === id);
+  if (users.length) return say("themes-message", `${users.map((d) => d.name).join(", ")} uses this theme, pick another one there first`, true);
+  const children = userThemes().filter((t) => t.extends === id);
+  if (children.length) return say("themes-message", `${children.map((t) => t.name || t.id).join(", ")} builds on this theme`, true);
+  if (!confirm(`delete ${themeName(id)}?`)) return;
+  remember();
+  config.themes = userThemes().filter((t) => t.id !== id);
+  if (!config.themes.length) delete config.themes;
+  themePicked = null;
+  drawThemes();
+}
+
+$("theme-new").onclick = () => {
+  const name = prompt("name for the new theme");
+  if (!name) return;
+  remember();
+  const base = config.dashboards[themeDash ?? dash].theme.dark;
+  addTheme({ id: newThemeId(name), name, extends: base });
+  themePicked = userThemes().at(-1).id;
+  drawThemes();
+};
+$("theme-dashboard").onchange = (e) => { themeDash = Number(e.target.value); drawThemes(); };
+for (const key of ["mode", "light", "dark"]) {
+  $("theme-" + key).onchange = (e) => {
+    remember();
+    config.dashboards[themeDash].theme[key] = e.target.value;
+    drawThemes();
+  };
+}
+$("themes-save").onclick = () => save(JSON.stringify(config, null, 2), "themes-message");
 
 const uniqueId = (taken, base) => { let n = 1, id = base; while (taken.includes(id)) id = base + ++n; return id; };
 
