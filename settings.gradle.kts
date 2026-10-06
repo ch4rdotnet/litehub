@@ -28,4 +28,5 @@ include(":core:model")
 include(":core:config")
 include(":ui:tokens")
 include(":ui:components")
+include(":ui:widgets")
  
