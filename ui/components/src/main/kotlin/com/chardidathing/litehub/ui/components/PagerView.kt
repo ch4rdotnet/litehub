@@ -26,8 +26,17 @@ class PagerView(context: Context, private val theme: ResolvedTheme, pages: List<
     // inside a touch event, so whatever it sets off can't cost the swipe a frame
     var onSettled: ((page: Int) -> Unit)? = null
 
+    // a finger held still on the dashboard, the way into the admin menu
+    var onLongPress: (() -> Unit)? = null
+
     var current = 0
         private set
+
+    private var longPressed = false
+    private val longPress = Runnable {
+        longPressed = true
+        onLongPress?.invoke()
+    }
 
     private val config = ViewConfiguration.get(context)
     private var settling: ValueAnimator? = null
@@ -63,17 +72,36 @@ class PagerView(context: Context, private val theme: ResolvedTheme, pages: List<
         if (changed) scrollTo(current * w, 0)
     }
 
+    // a long press takes the gesture from whatever it started on, so a tile doesn't also toggle
     override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
-        if (childCount < 2) return false
+        watchLongPress(ev)
+        if (childCount < 2) return longPressed
         gesture(ev)
-        return dragging
+        return dragging || longPressed
     }
 
     // reached directly when the touch started on something that isn't clickable
     override fun onTouchEvent(ev: MotionEvent): Boolean {
-        if (childCount < 2) return false
-        gesture(ev)
+        watchLongPress(ev)
+        if (childCount >= 2 && !longPressed) gesture(ev)
         return true
+    }
+
+    private fun watchLongPress(ev: MotionEvent) {
+        when (ev.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                downX = ev.x
+                downY = ev.y
+                longPressed = false
+                removeCallbacks(longPress)
+                postDelayed(longPress, ViewConfiguration.getLongPressTimeout().toLong())
+            }
+            MotionEvent.ACTION_MOVE -> {
+                val slop = config.scaledTouchSlop
+                if (abs(ev.x - downX) > slop || abs(ev.y - downY) > slop) removeCallbacks(longPress)
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> removeCallbacks(longPress)
+        }
     }
 
     private fun gesture(ev: MotionEvent) {
