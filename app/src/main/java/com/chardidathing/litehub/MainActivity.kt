@@ -3,12 +3,15 @@ package com.chardidathing.litehub
 import android.app.Activity
 import android.content.res.Configuration
 import android.graphics.drawable.ColorDrawable
+import android.content.Intent
 import android.os.Bundle
+import android.widget.FrameLayout
 import android.view.ViewTreeObserver
 import com.chardidathing.litehub.ui.components.MessageView
 import com.chardidathing.litehub.ui.components.PageView
 import com.chardidathing.litehub.ui.components.PagerView
 import com.chardidathing.litehub.ui.components.WidgetView
+import com.chardidathing.litehub.ui.tokens.ResolvedTheme
 import com.chardidathing.litehub.ui.widgets.WidgetCatalog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -27,6 +30,9 @@ class MainActivity : Activity() {
     private var binder: DashboardBinder? = null
     private var pager: PagerView? = null
     private val ticker by lazy { Ticker(this) }
+    private lateinit var root: FrameLayout
+    private lateinit var admin: AdminFlow
+    private var theme: ResolvedTheme? = null
     private var started = false
     private var reportedDrawn = false
     // nothing touches the network until the cached dashboard is on screen
@@ -34,7 +40,30 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        root = FrameLayout(this)
+        setContentView(root)
+        // after setContentView, the insets controller needs the decor view to exist
+        Kiosk.immerse(window)
+        admin = AdminFlow(this, app, root, scope, onReload = ::reload)
         load()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        // bars come back after dialogs and system ui, hide them again
+        if (hasFocus) Kiosk.immerse(window)
+    }
+
+    // a launcher has nowhere to go back to, back only closes the menu
+    @Deprecated("still the only back hook on api 28")
+    override fun onBackPressed() {
+        if (admin.isOpen) admin.close()
+    }
+
+    // home pressed while already home
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        admin.close()
     }
 
     override fun onStart() {
@@ -69,19 +98,34 @@ class MainActivity : Activity() {
         app.feeds.start()
     }
 
+    private fun reload() {
+        admin.close()
+        binder?.stop()
+        app.calendars.stop()
+        app.feeds.stop()
+        Watchdog.clear(app)
+        scope.launch {
+            withContext(Dispatchers.IO) { app.reload() }
+            load()
+        }
+    }
+
     private fun load() {
+        val safe = Watchdog.inCrashLoop(app)
         val systemDark = resources.configuration.uiMode and
             Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
         val metrics = resources.displayMetrics
         loading?.cancel()
         loading = scope.launch {
-            val screen = withContext(Dispatchers.IO) { loader.load(systemDark, metrics) }
+            val screen = withContext(Dispatchers.IO) { loader.load(systemDark, metrics, safe) }
             show(screen)
         }
     }
 
     private fun show(screen: Screen) {
         val theme = screen.theme
+        this.theme = theme
+        admin.notice = (screen as? Screen.Failed)?.reason
         binder?.stop()
         binder = null
         pager = null
@@ -102,13 +146,26 @@ class MainActivity : Activity() {
                 binder = b
                 PagerView(this, theme, pages).also {
                     pager = it
+                    it.onLongPress = { admin.open(theme) }
                     it.onSettled = { page -> if (started) b.show(page) }
                     if (started) b.show(it.current)
                 }
             }
-            is Screen.Failed -> MessageView(this, theme, "config couldn't be loaded", screen.reason)
+            is Screen.Failed -> MessageView(this, theme, if (screen.reason == DashboardLoader.SAFE_MODE) "safe mode" else "config couldn't be loaded", screen.reason).apply {
+                // a broken config still has to reach the menu
+                setOnLongClickListener {
+                    admin.open(theme)
+                    true
+                }
+            }
         }
-        setContentView(view)
+        root.removeAllViews()
+        root.addView(view)
+        if (firstFrameDone) {
+            // a reload built new repositories, they need starting like the first ones were
+            app.ha.connect()
+            if (started) startSources()
+        }
         if (!reportedDrawn) {
             reportedDrawn = true
             view.viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {

@@ -25,7 +25,11 @@ sealed interface Screen {
 // does all the disk work for a launch, call it off the main thread
 class DashboardLoader(private val app: LitehubApp) {
 
-    suspend fun load(systemDark: Boolean, metrics: DisplayMetrics): Screen = try {
+    // safe skips the config and every source, it's what a crash loop gets
+    suspend fun load(systemDark: Boolean, metrics: DisplayMetrics, safe: Boolean): Screen =
+        if (safe) failed(SAFE_MODE, systemDark, metrics) else loadDashboard(systemDark, metrics)
+
+    private suspend fun loadDashboard(systemDark: Boolean, metrics: DisplayMetrics): Screen = try {
         importDropped()
         val text = File(app.filesDir, LitehubApp.CONFIG_FILE).takeIf { it.exists() }?.readText()
             ?: app.assets.open("default_config.json").bufferedReader().use { it.readText() }
@@ -69,6 +73,10 @@ class DashboardLoader(private val app: LitehubApp) {
             feeds = feeds.map { it.id },
             problem = app.sources.exceptionOrNull()?.message,
         )
+    }
+
+    companion object {
+        const val SAFE_MODE = "litehub crashed 3 times in a minute, so it isn't loading the dashboard. hold anywhere for the menu, reload tries again"
     }
 
     private fun failed(reason: String, systemDark: Boolean, metrics: DisplayMetrics): Screen {
