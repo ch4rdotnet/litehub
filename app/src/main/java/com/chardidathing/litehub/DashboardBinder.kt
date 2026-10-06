@@ -8,6 +8,7 @@ import com.chardidathing.litehub.ui.widgets.CalendarWidget
 import com.chardidathing.litehub.ui.widgets.EntityWidget
 import com.chardidathing.litehub.ui.widgets.FeedWidget
 import com.chardidathing.litehub.ui.widgets.Moment
+import com.chardidathing.litehub.ui.widgets.NotificationsWidget
 import com.chardidathing.litehub.ui.widgets.TodoWidget
 import com.chardidathing.litehub.ui.widgets.WeatherWidget
 import com.chardidathing.litehub.source.weather.WeatherRepository
@@ -27,6 +28,7 @@ class DashboardBinder(
     private val weather: WeatherRepository,
     // a list's "type" chip wants the keyboard, the activity owns that
     private val askText: (title: String, onText: (String) -> Unit) -> Unit,
+    private val notifications: NotificationCenter,
     private val now: StateFlow<Moment>,
     private val pages: List<List<WidgetView>>,
     private val scope: CoroutineScope,
@@ -39,6 +41,10 @@ class DashboardBinder(
             val id = widget.config.entity
             // failures come back through the snapshot, so there's nothing to handle here
             if (ha.canToggle(id)) widget.onTap = { scope.launch { ha.toggle(id) } }
+        }
+        for (panel in pages.flatten().filterIsInstance<NotificationsWidget>()) {
+            panel.onRemove = notifications::remove
+            panel.onClear = notifications::clear
         }
         for (list in pages.flatten().filterIsInstance<TodoWidget>()) {
             val id = list.config.entity
@@ -76,6 +82,7 @@ class DashboardBinder(
         is WeatherWidget -> scope.launch {
             combine(weather.watch(weather.key(widget.config.entity)), now, ::Pair).collect { (s, m) -> widget.show(s, m) }
         }
+        is NotificationsWidget -> scope.launch { combine(notifications.items, now, ::Pair).collect { (n, m) -> widget.show(n, m) } }
         is TodoWidget -> scope.launch {
             try {
                 ha.todo(widget.config.entity).collect(widget::show)

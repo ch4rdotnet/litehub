@@ -53,6 +53,8 @@ class LitehubApp : Application() {
 
     val screensaver by lazy { ScreensaverController(this, scope) }
 
+    val notifications by lazy { NotificationCenter(filesDir, scope) }
+
     // what's on screen, for the status page
     data class HubState(val dashboard: String = "", val page: Int = 1, val screenOn: Boolean = true)
 

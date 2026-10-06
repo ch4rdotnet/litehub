@@ -34,8 +34,8 @@ class CompanionBridge(private val app: LitehubApp, private val scope: CoroutineS
         fun page(number: Int)
         fun reload()
         fun speak(text: String)
-        // chime is false when the automation asked for a quiet one
-        fun notify(title: String?, message: String, chime: Boolean)
+        // chime is false when the automation asked for a quiet one, tag lets it be cleared later
+        fun notify(title: String?, message: String, chime: Boolean, tag: String?)
     }
 
     data class State(
@@ -144,7 +144,14 @@ class CompanionBridge(private val app: LitehubApp, private val scope: CoroutineS
                 "command_page" -> command?.intOrNull?.let(commands::page)
                 "command_reload" -> commands.reload()
                 "TTS" -> ((data?.get("tts_text") as? JsonPrimitive)?.contentOrNull ?: title)?.let(commands::speak)
-                else -> commands.notify(title, message, (data?.get("chime") as? JsonPrimitive)?.contentOrNull != "false")
+                // ha companion's way of taking a notification back
+                "clear_notification" -> (data?.get("tag") as? JsonPrimitive)?.contentOrNull?.let(app.notifications::removeTag)
+                else -> commands.notify(
+                    title,
+                    message,
+                    chime = (data?.get("chime") as? JsonPrimitive)?.contentOrNull != "false",
+                    tag = (data?.get("tag") as? JsonPrimitive)?.contentOrNull,
+                )
             }
         }
     }

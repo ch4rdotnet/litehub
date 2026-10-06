@@ -9,8 +9,13 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import com.chardidathing.litehub.core.config.ConfigCodec
-import com.chardidathing.litehub.ui.components.NoticeView
+import com.chardidathing.litehub.ui.components.NoticeStack
 import com.chardidathing.litehub.ui.components.ScreensaverView
+import com.chardidathing.litehub.ui.components.ShadeView
+import com.chardidathing.litehub.ui.widgets.NotificationsConfig
+import com.chardidathing.litehub.ui.widgets.NotificationsWidget
+import android.view.Gravity
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.delay
 import com.chardidathing.litehub.ui.editor.TextPrompt
 import android.view.inputmethod.InputMethodManager
@@ -40,7 +45,8 @@ class MainActivity : Activity() {
         const val MS_PER_S = 1000L
         const val MAX_LEVEL = 255f
         // a notification banner stays this long unless it's tapped away
-        const val NOTICE_MS = 15_000L
+        const val NOTICE_MS = 5_000L
+        const val MAX_NOTICES = 7
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -55,10 +61,9 @@ class MainActivity : Activity() {
     private lateinit var editor: EditorFlow
     private lateinit var companion: CompanionBridge
     private var screenOff: View? = null
-    private var notice: View? = null
+    private var notices: NoticeStack? = null
     private var tts: TextToSpeech? = null
     private val chime by lazy { Chime(this) }
-    private val hideNotice = Runnable { notice?.let(root::removeView); notice = null }
     private var ready: Screen.Ready? = null
     private var theme: ResolvedTheme? = null
     private var started = false
@@ -98,6 +103,7 @@ class MainActivity : Activity() {
     @Deprecated("still the only back hook on api 28")
     override fun onBackPressed() {
         when {
+            shade != null -> shade?.close()
             prompt != null -> closePrompt()
             editor.isOpen -> editor.back()
             admin.isOpen -> admin.close()
@@ -148,6 +154,7 @@ class MainActivity : Activity() {
             // the touch that wakes the screen doesn't also tap whatever was under it
             if (sleeping) return true
         }
+        if (watchEdge(ev)) return true
         return super.dispatchTouchEvent(ev)
     }
 
@@ -191,9 +198,10 @@ class MainActivity : Activity() {
             }
         }
 
-        override fun notify(title: String?, message: String, chime: Boolean) {
+        override fun notify(title: String?, message: String, chime: Boolean, tag: String?) {
             // an alert is worth seeing, it wakes a dimmed or blank screen
             app.screensaver.wake("a notification")
+            app.notifications.add(title, message, tag)
             showNotice(title, message)
             if (chime && app.settings.chime) this@MainActivity.chime.play()
         }
@@ -265,14 +273,59 @@ class MainActivity : Activity() {
         if (wanted.isNotEmpty()) requestPermissions(wanted.toTypedArray(), PERMISSIONS)
     }
 
+    // top right, slides in, slides out again after a few seconds. a newer one takes its place
     private fun showNotice(title: String?, message: String) {
         val theme = this.theme ?: return
-        notice?.let(root::removeView)
-        root.removeCallbacks(hideNotice)
-        val view = NoticeView(this, theme, title, message) { hideNotice.run() }
-        notice = view
-        root.addView(view, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
-        root.postDelayed(hideNotice, NOTICE_MS)
+        val stack = notices ?: NoticeStack(this, theme, MAX_NOTICES, NOTICE_MS).also { stack ->
+            notices = stack
+            val margin = theme.spacing.m.toInt()
+            root.addView(stack, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.END).apply {
+                setMargins(margin, margin, margin, margin)
+            })
+        }
+        stack.push(title, message)
+    }
+
+    // the pull down list of notifications, opened by dragging from the top edge
+    private var shade: ShadeView? = null
+    private var shadeJob: Job? = null
+    private var edgeDownY = -1f
+
+    private fun openShade() {
+        val theme = this.theme ?: return
+        if (shade != null) return
+        val list = NotificationsWidget(this, theme, NotificationsConfig()).apply {
+            onRemove = app.notifications::remove
+            onClear = app.notifications::clear
+        }
+        shadeJob = scope.launch { combine(app.notifications.items, ticker.now, ::Pair).collect { (n, m) -> list.show(n, m) } }
+        val view = ShadeView(this, theme, list) { closeShadeNow() }
+        shade = view
+        root.addView(view)
+        view.open()
+    }
+
+    private fun closeShadeNow() {
+        shadeJob?.cancel()
+        shade?.let(root::removeView)
+        shade = null
+    }
+
+    // a finger that starts on the top edge and pulls down opens the shade instead of touching the page
+    private fun watchEdge(ev: MotionEvent): Boolean {
+        val theme = this.theme ?: return false
+        when (ev.actionMasked) {
+            MotionEvent.ACTION_DOWN -> edgeDownY = if (ev.y < theme.spacing.xl && shade == null) ev.y else -1f
+            MotionEvent.ACTION_MOVE -> if (edgeDownY >= 0 && ev.y - edgeDownY > theme.touchTarget) {
+                edgeDownY = -1f
+                // the page already saw the start of the touch, tell it the gesture is over
+                super.dispatchTouchEvent(MotionEvent.obtain(ev).apply { action = MotionEvent.ACTION_CANCEL })
+                openShade()
+                return true
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> edgeDownY = -1f
+        }
+        return false
     }
 
     // ha asked for another dashboard, it sticks like a choice made on the device would
@@ -383,7 +436,7 @@ class MainActivity : Activity() {
                     widgets += made
                     view
                 }
-                val b = DashboardBinder(app.ha, app.calendars, app.feeds, app.weather, ::askText, ticker.now, widgets, scope)
+                val b = DashboardBinder(app.ha, app.calendars, app.feeds, app.weather, ::askText, app.notifications, ticker.now, widgets, scope)
                 binder = b
                 PagerView(this, theme, pages).also {
                     pager = it
@@ -407,7 +460,8 @@ class MainActivity : Activity() {
         root.removeAllViews()
         root.addView(view)
         screenOff = null
-        notice = null
+        notices = null
+        closeShadeNow()
         ready?.let { r ->
             companion.update { it.copy(dashboard = r.config.activeDashboard, page = (pager?.current ?: 0) + 1) }
             app.hubState = app.hubState.copy(dashboard = r.config.activeDashboard, page = (pager?.current ?: 0) + 1)
