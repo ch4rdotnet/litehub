@@ -85,7 +85,7 @@ class SettingsScreen(
         right.addView(problem)
         bar.addView(ButtonView(context, theme, "save") { host.save(JsonObject(values)) })
         bar.addView(space(gap))
-        bar.addView(ButtonView(context, theme, "cancel") { host.cancel() })
+        bar.addView(ButtonView(context, theme, "close") { host.cancel() })
         right.addView(bar)
         addView(right, LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, RIGHT_SHARE))
         show(0)
