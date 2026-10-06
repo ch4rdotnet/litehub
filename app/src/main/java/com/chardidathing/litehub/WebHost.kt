@@ -7,6 +7,7 @@ import android.os.Looper
 import com.chardidathing.litehub.core.config.ConfigCodec
 import com.chardidathing.litehub.core.config.ConfigException
 import com.chardidathing.litehub.core.config.SettingsForm
+import com.chardidathing.litehub.core.config.Themes
 import com.chardidathing.litehub.core.model.Hex
 import com.chardidathing.litehub.core.model.SettingsSection
 import kotlinx.serialization.json.JsonObject
@@ -83,7 +84,13 @@ class WebHost(private val app: LitehubApp) : HubAccess {
     }
 
     override fun saveConfig(text: String): Result<Unit> = validated {
-        ConfigCodec.decode(text)
+        val config = ConfigCodec.decode(text)
+        // themes are checked against the built in ones here, the codec doesn't know those
+        val themes = Themes(Presets.all, config.themes)
+        config.dashboards.forEach { d ->
+            themes[d.theme.light]
+            themes[d.theme.dark]
+        }
         val file = File(app.filesDir, LitehubApp.CONFIG_FILE)
         file.writeAtomic(text)
         AppLog.add("config saved from the web editor")
@@ -114,6 +121,8 @@ class WebHost(private val app: LitehubApp) : HubAccess {
     }
 
     override suspend fun settingsAction(id: String): Result<String> = app.settingsAction(id).map { it.toString() }
+
+    override fun presetThemes(): String = Json.encodeToString(ListSerializer(Theme.serializer()), Presets.all)
 
     override fun schemas(): String = Json.encodeToString(ListSerializer(WidgetSchema.serializer()), WidgetSchemas.all)
 

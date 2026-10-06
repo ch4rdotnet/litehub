@@ -61,6 +61,7 @@ class WebServer(port: Int, private val access: HubAccess, private val assets: As
         if (!authorised(s)) return text(NanoHTTPD.Response.Status.UNAUTHORIZED, "pin needed")
         return when {
             get && path == "/api/schema" -> json(access.schemas())
+            get && path == "/api/themes" -> json(access.presetThemes())
             get && path == "/api/config" -> json(access.config())
             s.method == NanoHTTPD.Method.PUT && path == "/api/config" -> saved(access.saveConfig(body(s)))
             get && path == "/api/sources" -> json(access.sources())

@@ -26,6 +26,9 @@ interface HubAccess {
     // a settings section's button (ha's home location), the values it fills in as json
     suspend fun settingsAction(id: String): Result<String>
 
+    // the built in themes, fully filled in, so the theme editor can show what a theme inherits
+    fun presetThemes(): String
+
     fun schemas(): String
 
     suspend fun entities(): Result<String>
