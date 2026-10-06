@@ -19,11 +19,8 @@ class PageBinder(
         for (widget in widgets) {
             val id = widget.config.entity
             if (!repository.canToggle(id)) continue
-            widget.onTap = {
-                scope.launch {
-                    repository.toggle(id).onFailure { widget.showError(it.message ?: "couldn't reach home assistant") }
-                }
-            }
+            // failures come back through the snapshot, so there's nothing to handle here
+            widget.onTap = { scope.launch { repository.toggle(id) } }
         }
     }
 

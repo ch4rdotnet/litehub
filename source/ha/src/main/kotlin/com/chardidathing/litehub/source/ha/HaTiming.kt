@@ -15,6 +15,8 @@ data class HaTiming(
     val cacheFlush: Duration = 5.seconds,
     // how long a toggle shows its guessed state if ha never sends the real one
     val optimisticHold: Duration = 10.seconds,
+    // how long a failed toggle's error stays on the tile if nothing else changes
+    val errorHold: Duration = 10.seconds,
 ) {
     fun backoff(attempt: Int): Duration =
         (backoffMin * (1 shl attempt.coerceAtMost(16)).toDouble()).coerceAtMost(backoffMax)

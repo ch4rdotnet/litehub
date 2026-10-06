@@ -22,10 +22,11 @@ data class Entity(
 sealed interface EntitySnapshot {
     data object Connecting : EntitySnapshot
 
-    data class Live(val entity: Entity) : EntitySnapshot
+    // error is a failed action on this entity (a toggle ha refused), until it next changes
+    data class Live(val entity: Entity, val error: String? = null) : EntitySnapshot
 
     // cached state while the connection is down, reason says why
-    data class Stale(val entity: Entity, val reason: String) : EntitySnapshot
+    data class Stale(val entity: Entity, val reason: String, val error: String? = null) : EntitySnapshot
 
     data object NotFound : EntitySnapshot
 

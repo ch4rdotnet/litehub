@@ -14,6 +14,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.time.Duration
 
 // live entity state for whatever is on screen, backed by the cache while ha is away.
 // all state is confined to one thread, the public calls hop onto it
@@ -38,6 +39,7 @@ class EntityRepository(
     private val fresh = HashSet<String>()
     private val notFound = HashSet<String>()
     private val optimistic = HashMap<String, Entity>()
+    private val errors = HashMap<String, String>()
     private val flows = ConcurrentHashMap<String, MutableStateFlow<EntitySnapshot>>()
     private val dirty = HashSet<String>()
     private var flushing = false
@@ -76,27 +78,28 @@ class EntityRepository(
             "off" -> current.copy(state = "on")
             else -> null
         }
-        if (guess != null) {
-            optimistic[id] = guess
-            publish(id)
-        }
+        errors.remove(id)
+        if (guess != null) optimistic[id] = guess
+        publish(id)
         val result = c.callService(id.substringBefore('.'), "toggle", id)
-        if (guess != null) {
-            if (result.isFailure) {
-                optimistic.remove(id)
-                publish(id)
-            } else {
-                scope.launch {
-                    delay(timing.optimisticHold)
-                    // only drop our own guess, a later toggle may have replaced it
-                    if (optimistic[id] === guess) {
-                        optimistic.remove(id)
-                        publish(id)
-                    }
-                }
-            }
+        if (result.isFailure) {
+            if (guess != null) optimistic.remove(id)
+            val message = result.exceptionOrNull()?.message ?: "home assistant refused"
+            errors[id] = message
+            expire(id, timing.errorHold) { errors[id] === message && errors.remove(id) != null }
+        } else if (guess != null) {
+            // only drop our own guess, a later toggle may have replaced it
+            expire(id, timing.optimisticHold) { optimistic[id] === guess && optimistic.remove(id) != null }
         }
+        publish(id)
         result
+    }
+
+    private fun expire(id: String, after: Duration, drop: () -> Boolean) {
+        scope.launch {
+            delay(after)
+            if (drop()) publish(id)
+        }
     }
 
     private inner class Events : HaClient.Listener {
@@ -116,7 +119,10 @@ class EntityRepository(
             }
             notFound.addAll(result.removed)
             fresh.addAll(result.added + result.changed)
-            touched.forEach { optimistic.remove(it) }
+            touched.forEach {
+                optimistic.remove(it)
+                errors.remove(it)
+            }
             val affected = if (event.initial) touched + event.requested else touched
             markDirty(affected)
             affected.forEach(::publish)
@@ -130,15 +136,16 @@ class EntityRepository(
 
     private fun compute(id: String): EntitySnapshot {
         val entity = optimistic[id] ?: entities[id]
+        val error = errors[id]
         return when (val s = status) {
             HaClient.Status.Connected -> when {
                 id in notFound -> EntitySnapshot.NotFound
-                entity != null && id in fresh -> EntitySnapshot.Live(entity)
-                entity != null -> EntitySnapshot.Stale(entity, CONNECTING)
+                entity != null && id in fresh -> EntitySnapshot.Live(entity, error)
+                entity != null -> EntitySnapshot.Stale(entity, CONNECTING, error)
                 else -> EntitySnapshot.Connecting
             }
-            HaClient.Status.Connecting -> entity?.let { EntitySnapshot.Stale(it, CONNECTING) } ?: EntitySnapshot.Connecting
-            is HaClient.Status.Failed -> entity?.let { EntitySnapshot.Stale(it, s.reason) } ?: EntitySnapshot.Failed(s.reason)
+            HaClient.Status.Connecting -> entity?.let { EntitySnapshot.Stale(it, CONNECTING, error) } ?: EntitySnapshot.Connecting
+            is HaClient.Status.Failed -> entity?.let { EntitySnapshot.Stale(it, s.reason, error) } ?: EntitySnapshot.Failed(s.reason)
         }
     }
 

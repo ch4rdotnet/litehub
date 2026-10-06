@@ -29,28 +29,25 @@ abstract class EntityWidget(
     protected var snapshot: EntitySnapshot = EntitySnapshot.Connecting
         private set
 
-    // shown in place of the state until the next snapshot, for a failed service call
-    protected var error: String? = null
-        private set
-
     init {
         setOnClickListener { onTap?.invoke() }
     }
 
     fun show(snapshot: EntitySnapshot) {
-        if (snapshot == this.snapshot && error == null) return
+        if (snapshot == this.snapshot) return
         this.snapshot = snapshot
-        error = null
         setBadge((snapshot as? EntitySnapshot.Stale)?.reason)
         onContentChanged()
         invalidate()
     }
 
-    fun showError(reason: String) {
-        error = reason
-        onContentChanged()
-        invalidate()
-    }
+    // a failed action, shown in place of the state
+    private val error: String?
+        get() = when (val s = snapshot) {
+            is EntitySnapshot.Live -> s.error
+            is EntitySnapshot.Stale -> s.error
+            else -> null
+        }
 
     protected val entity: Entity?
         get() = when (val s = snapshot) {
