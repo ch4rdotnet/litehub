@@ -7,6 +7,7 @@ import com.chardidathing.litehub.core.model.EntitySnapshot
 import com.chardidathing.litehub.core.model.TodoItem
 import com.chardidathing.litehub.core.model.TodoSnapshot
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -187,6 +188,15 @@ class EntityRepository(
     }
 
     private fun JsonObject.str(key: String) = (this[key] as? JsonPrimitive)?.contentOrNull
+
+    // a one shot websocket command for other sources (the media browser), not while disconnected
+    suspend fun command(type: String, fields: JsonObject): Result<JsonElement?> = withContext(confined) {
+        val c = client ?: return@withContext Result.failure(IOException(statusReason()))
+        c.command(type, fields)
+    }
+
+    // ha's address, for turning the relative urls it hands back into ones that can be fetched
+    val baseUrl: String? = credentials.getOrNull()?.url?.trimEnd('/')
 
     // a websocket round trip, for the status page. null while not connected
     suspend fun latencyMs(): Long? = withContext(confined) {

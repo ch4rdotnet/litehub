@@ -140,7 +140,9 @@ class HaClient(
     }.map { (it as? JsonObject)?.get("response") as? JsonObject }
 
     // any one shot websocket command (get_states, the registries), answers with its result
-    suspend fun command(type: String): Result<JsonElement?> = request(type) {}
+    suspend fun command(type: String, fields: JsonObject? = null): Result<JsonElement?> = request(type) {
+        fields?.forEach { (k, v) -> put(k, v) }
+    }
 
     private suspend fun request(type: String, fields: JsonObjectBuilder.() -> Unit): Result<JsonElement?> {
         val ws = socket ?: return Result.failure(IOException("not connected to home assistant"))
