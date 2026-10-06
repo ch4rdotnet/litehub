@@ -24,6 +24,8 @@ object SettingsCodec {
             throw ConfigException("settings.json version ${settings.version} is newer than this app supports ($VERSION)")
         }
         validate(settings.screensaver)
+        if (settings.dlna.port !in PORTS) throw ConfigException("dlna port is 1024 to 65535")
+        if (settings.dlna.port == settings.web.port) throw ConfigException("dlna and the web editor can't share a port")
         return settings
     }
 
@@ -64,6 +66,7 @@ object SettingsCodec {
 
     // anything faster is a slideshow, not a frame, and costs a decode every few seconds
     private const val MIN_PHOTO_SECONDS = 5
+    private val PORTS = 1024..65535
 
     fun encode(settings: DeviceSettings): String = ConfigCodec.json.encodeToString(DeviceSettings.serializer(), settings)
 }

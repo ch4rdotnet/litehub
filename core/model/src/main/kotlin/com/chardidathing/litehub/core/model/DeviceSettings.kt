@@ -15,7 +15,16 @@ data class DeviceSettings(
     val screensaver: ScreensaverSettings = ScreensaverSettings(),
     // notification banners play a short chime, a message can still ask for silence
     val chime: Boolean = true,
+    val dlna: DlnaSettings = DlnaSettings(),
 )
+
+// the hub as a dlna media renderer ha (or anything else on the lan) can play to. uuid is made
+// the first time it's turned on and kept, so ha sees the same device across restarts
+@Serializable
+data class DlnaSettings(val enabled: Boolean = false, val port: Int = DEFAULT_DLNA_PORT, val uuid: String? = null)
+
+// the start of the dynamic range, where upnp devices usually sit
+const val DEFAULT_DLNA_PORT = 49152
 
 // the photo frame, idle and night behaviour, and what wakes the screen
 @Serializable
