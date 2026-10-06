@@ -27,6 +27,9 @@ import java.io.File
 import java.io.IOException
 import java.time.ZoneId
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 
 // weather for each ha weather entity a widget shows, or open-meteo for the location when a
 // widget has none. now is live (the entity's state), forecasts refresh on an interval. the last
@@ -101,6 +104,8 @@ class WeatherRepository(
     }
 
     private suspend fun haForecasts(entity: String): Result<Unit> {
+        // the loop's first pass lands right after boot, give the websocket a moment to come up
+        withTimeoutOrNull(CONNECT_WAIT) { ha.connected.first { it } }
         val hourly = ha.query("weather", "get_forecasts", entity, buildJsonObject { put("type", "hourly") })
             .map { HaWeather.forecasts(it, entity, zone()).filter { f -> f.timeMs >= now() - HOUR_MS }.take(OpenMeteo.HOURS) }
         val daily = ha.query("weather", "get_forecasts", entity, buildJsonObject { put("type", "daily") })
@@ -157,6 +162,7 @@ class WeatherRepository(
     companion object {
         const val OPEN_METEO = "open-meteo"
         private val REFRESH = 30.minutes
+        private val CONNECT_WAIT = 30.seconds
         private const val HOUR_MS = 3_600_000L
     }
 }

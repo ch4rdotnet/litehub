@@ -58,6 +58,11 @@ class EntityRepository(
         else -> HaClient.Status.Connecting
     }
 
+    private val _connected = MutableStateFlow(false)
+
+    // whether the websocket is up and authenticated, for work that's pointless before it is
+    val connected: StateFlow<Boolean> = _connected
+
     private val entities = HashMap<String, Entity>()
     // seen since the current subscription started, anything else is from the cache
     private val fresh = HashSet<String>()
@@ -243,6 +248,7 @@ class EntityRepository(
 
         override fun onStatus(status: HaClient.Status) {
             this@EntityRepository.status = status
+            _connected.value = status is HaClient.Status.Connected
             if (status !is HaClient.Status.Connected) fresh.clear()
             flows.keys.forEach(::publish)
             synchronized(todos) { todos.keys.toList() }.forEach(::publishTodo)
