@@ -33,7 +33,6 @@ class FeedRepository(
     private val loop = RefreshLoop(
         scope = scope,
         intervals = sources.associate { it.id to it.refreshMinutes.minutes },
-        retry = RETRY,
         now = now,
         refresh = ::refresh,
     )
@@ -78,9 +77,5 @@ class FeedRepository(
         // newest first, undated items keep their place after the dated ones
         val sorted = items.filter { it.source in byId }.sortedByDescending { it.publishedMs ?: Long.MIN_VALUE }
         _snapshot.value = FeedSnapshot(sorted, statuses)
-    }
-
-    private companion object {
-        val RETRY = 5.minutes
     }
 }

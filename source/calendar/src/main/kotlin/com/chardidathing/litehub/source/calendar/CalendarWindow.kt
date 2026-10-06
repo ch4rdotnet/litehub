@@ -3,15 +3,11 @@ package com.chardidathing.litehub.source.calendar
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
-import kotlin.time.Duration.Companion.minutes
 
 // how much of each calendar is kept expanded, around today
 object CalendarWindow {
     const val PAST_DAYS = 7L
     const val FUTURE_DAYS = 60L
-
-    // a failed fetch tries again this soon, rather than waiting out the whole interval
-    val RETRY = 5.minutes
 
     fun from(today: LocalDate, zone: ZoneId): Instant = today.minusDays(PAST_DAYS).atStartOfDay(zone).toInstant()
 

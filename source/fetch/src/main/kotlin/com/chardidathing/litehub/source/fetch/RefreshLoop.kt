@@ -6,6 +6,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
 
 // refreshes each source when it's due, one at a time, while started. due times come from the
 // last good fetch so a restart doesn't refetch everything that's still fresh. scope must be
@@ -13,8 +14,6 @@ import kotlin.time.Duration.Companion.milliseconds
 class RefreshLoop(
     private val scope: CoroutineScope,
     private val intervals: Map<String, Duration>,
-    // a failed fetch retries sooner than the source's interval, but not in a tight loop
-    private val retry: Duration,
     private val now: () -> Long,
     private val refresh: suspend (id: String) -> Boolean,
 ) {
@@ -37,7 +36,7 @@ class RefreshLoop(
                 for ((id, interval) in intervals) {
                     if ((nextDue[id] ?: 0L) > t) continue
                     val ok = refresh(id)
-                    nextDue[id] = now() + if (ok) interval.inWholeMilliseconds else retry.inWholeMilliseconds
+                    nextDue[id] = now() + if (ok) interval.inWholeMilliseconds else RETRY.inWholeMilliseconds
                 }
                 val wait = (nextDue.values.minOrNull() ?: return@launch) - now()
                 delay(wait.coerceAtLeast(0).milliseconds)
@@ -48,5 +47,10 @@ class RefreshLoop(
     fun stop() {
         job?.cancel()
         job = null
+    }
+
+    private companion object {
+        // a failed fetch retries sooner than the source's interval, but not in a tight loop
+        val RETRY = 5.minutes
     }
 }

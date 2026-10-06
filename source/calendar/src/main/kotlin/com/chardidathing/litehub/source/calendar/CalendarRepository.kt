@@ -41,7 +41,6 @@ class CalendarRepository(
     private val loop = RefreshLoop(
         scope = scope,
         intervals = sources.associate { it.id to it.refreshMinutes.minutes },
-        retry = CalendarWindow.RETRY,
         now = now,
         refresh = ::refresh,
     )
