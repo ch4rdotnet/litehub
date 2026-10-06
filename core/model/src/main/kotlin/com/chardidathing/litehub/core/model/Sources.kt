@@ -32,3 +32,8 @@ data class FeedSource(
 )
 
 const val DEFAULT_REFRESH_MINUTES = 30
+
+// how the last refresh of one source went. lastGood is when data last arrived (null if never),
+// error is set while the newest attempt failed, so old data can show with the reason beside it
+@Serializable
+data class SourceStatus(val lastGood: Long? = null, val error: String? = null)
