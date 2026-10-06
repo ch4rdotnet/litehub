@@ -124,6 +124,9 @@ object Presets {
     // what a "screen off" overlay draws, black pixels are dark on lcd and off on oled
     const val SCREEN_OFF = 0xFF000000.toInt()
 
+    // around a video that doesn't fill the screen, any other colour shows up as a frame
+    const val LETTERBOX = 0xFF000000.toInt()
+
     // md2's 32% black scrim, dims the page under the shade so the two don't run together
     const val SCRIM = 0x52000000
 
