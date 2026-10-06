@@ -25,6 +25,8 @@ class RowList(private val theme: ResolvedTheme) {
         val textX: Float,
         val lead: TextBlock?,
         val leadX: Float,
+        // the lead is a smaller style, it sits on the text's baseline rather than its top
+        val leadY: Float,
         val y: Float,
         val bar: RectF?,
         val barColor: Int,
@@ -53,7 +55,7 @@ class RowList(private val theme: ResolvedTheme) {
                 barPaint.color = p.barColor
                 canvas.drawRect(it, barPaint)
             }
-            p.lead?.draw(canvas, p.leadX, p.y)
+            p.lead?.draw(canvas, p.leadX, p.leadY)
             p.text.draw(canvas, p.textX, p.y)
         }
         canvas.restore()
@@ -85,7 +87,7 @@ class RowList(private val theme: ResolvedTheme) {
                 val hidden = body.drop(i).count { it.kind == Kind.ITEM }
                 if (hidden > 0) {
                     val more = TextBlock(maxLines = 1).apply { set("$hidden more", theme.type.caption, theme.colors.onSurface, width) }
-                    out += Placed(more, 0f, null, 0f, y, null, 0)
+                    out += Placed(more, 0f, null, 0f, y, y, null, 0)
                 }
                 break
             }
@@ -94,12 +96,13 @@ class RowList(private val theme: ResolvedTheme) {
                 TextBlock(maxLines = 1).apply { set(it, theme.type.body2, theme.colors.onSurface, leadColumn.toInt() + 1) }
             }
             val bar = row.accent?.let { RectF(0f, y, theme.spacing.xs, y + text.height) }
-            out += Placed(text, textX, lead, leadX, y, bar, row.accent ?: 0)
+            val leadY = y + text.baseline - (lead?.baseline ?: 0)
+            out += Placed(text, textX, lead, leadX, leadY, y, bar, row.accent ?: 0)
             y += text.height + gap
         }
         var ny = limit
         for (b in noteBlocks) {
-            out += Placed(b, 0f, null, 0f, ny, null, 0)
+            out += Placed(b, 0f, null, 0f, ny, ny, null, 0)
             ny += b.height + gap
         }
         return out
