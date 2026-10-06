@@ -8,6 +8,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import okhttp3.OkHttpClient
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -128,6 +131,21 @@ class HaClientTest {
         ha.failServices = true
         val failed = runBlocking { withContext(confined) { client.callService("light", "toggle", "light.a") } }
         assertEquals("service not found.", failed.exceptionOrNull()?.message)
+    }
+
+    @Test
+    fun `service calls can return a response`() {
+        ha.serviceResponse = """{"calendar.bins":{"events":[{"summary":"bins out"}]}}"""
+        ha.accept()
+        val client = client()
+        client.start()
+        awaitStatus<HaClient.Status.Connected>()
+        val data = buildJsonObject { put("duration", "1") }
+        val result = runBlocking { withContext(confined) { client.callService("calendar", "get_events", "calendar.bins", data, returnResponse = true) } }
+        assertEquals("calendar.bins", result.getOrThrow()!!.keys.single())
+        val sent = generateSequence { ha.received.poll(5, TimeUnit.SECONDS) }.first { it.type() == "call_service" }
+        assertEquals("true", sent["return_response"].toString())
+        assertEquals("1", (sent["service_data"] as kotlinx.serialization.json.JsonObject)["duration"]?.jsonPrimitive?.content)
     }
 
     private inline fun <reified T : HaClient.Status> awaitStatus(): T {

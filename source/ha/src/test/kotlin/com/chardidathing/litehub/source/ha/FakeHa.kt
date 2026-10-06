@@ -28,6 +28,9 @@ class FakeHa(private val token: String) : AutoCloseable {
 
     @Volatile var failServices = false
 
+    // sent back as result.response when a call asks for return_response
+    @Volatile var serviceResponse: String? = null
+
     @Volatile private var socket: WebSocket? = null
 
     @Volatile private var subscription: Int? = null
@@ -79,7 +82,14 @@ class FakeHa(private val token: String) : AutoCloseable {
                     webSocket.send(event(id, """{"a":{$added}}"""))
                 }
                 "unsubscribe_events" -> webSocket.send(result(id!!, success = true))
-                "call_service" -> webSocket.send(result(id!!, success = !failServices))
+                "call_service" -> {
+                    val response = serviceResponse.takeIf { msg["return_response"]?.jsonPrimitive?.content == "true" }
+                    if (response != null && !failServices) {
+                        webSocket.send("""{"id":$id,"type":"result","success":true,"result":{"context":{},"response":$response}}""")
+                    } else {
+                        webSocket.send(result(id!!, success = !failServices))
+                    }
+                }
             }
         }
     }

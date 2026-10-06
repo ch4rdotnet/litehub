@@ -106,7 +106,14 @@ class HaClient(
         if (socket != null) resubscribe()
     }
 
-    suspend fun callService(domain: String, service: String, entityId: String): Result<Unit> {
+    // the service's response when asked for (calendar.get_events and the like), else null
+    suspend fun callService(
+        domain: String,
+        service: String,
+        entityId: String,
+        data: JsonObject? = null,
+        returnResponse: Boolean = false,
+    ): Result<JsonObject?> {
         val ws = socket ?: return Result.failure(IOException("not connected to home assistant"))
         val id = nextId++
         val reply = CompletableDeferred<JsonObject>()
@@ -118,12 +125,14 @@ class HaClient(
                 put("domain", domain)
                 put("service", service)
                 putJsonObject("target") { put("entity_id", entityId) }
+                if (data != null) put("service_data", data)
+                if (returnResponse) put("return_response", true)
             }.toString(),
         )
         return try {
             val result = withTimeout(timing.commandTimeout) { reply.await() }
             if ((result["success"] as? JsonPrimitive)?.booleanOrNull == true) {
-                Result.success(Unit)
+                Result.success((result["result"] as? JsonObject)?.get("response") as? JsonObject)
             } else {
                 val message = (result["error"] as? JsonObject)?.string("message")
                 Result.failure(IOException(message?.replaceFirstChar { it.lowercase() } ?: "home assistant refused"))

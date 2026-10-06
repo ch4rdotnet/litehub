@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
+import kotlinx.serialization.json.JsonObject
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration
@@ -69,8 +70,15 @@ class EntityRepository(
 
     fun canToggle(id: String) = id.substringBefore('.') in TOGGLE_DOMAINS
 
+    // a service call that answers with data, fails straight away while ha isn't connected
+    suspend fun query(domain: String, service: String, entityId: String, data: JsonObject): Result<JsonObject?> =
+        withContext(confined) {
+            val c = client ?: return@withContext Result.failure(IOException(statusReason()))
+            c.callService(domain, service, entityId, data, returnResponse = true)
+        }
+
     // flips the tile straight away and rolls back if ha says no
-    suspend fun toggle(id: String): Result<Unit> = withContext(confined) {
+    suspend fun toggle(id: String): Result<JsonObject?> = withContext(confined) {
         val c = client ?: return@withContext Result.failure(IOException(statusReason()))
         val current = entities[id]
         val guess = when (current?.state) {
