@@ -8,10 +8,12 @@ class PhotoParsingTest {
 
     @Test
     fun `immich album images only`() {
-        val ids = ImmichPhotos.parseAlbum(
-            """{"id":"alb","albumName":"frame","assets":[{"id":"a1","type":"IMAGE"},{"id":"v1","type":"VIDEO"},{"id":"a2","type":"IMAGE"}]}""",
+        val (ids, next) = ImmichPhotos.parseSearch(
+            """{"albums":{"total":0,"items":[]},"assets":{"total":3,"count":3,"items":[{"id":"a1","type":"IMAGE"},{"id":"v1","type":"VIDEO"},{"id":"a2","type":"IMAGE"}],"nextPage":"2"}}""",
         )
         assertEquals(listOf("a1", "a2"), ids)
+        assertEquals("2", next)
+        assertEquals(null, ImmichPhotos.parseSearch("""{"assets":{"items":[],"nextPage":null}}""").second)
     }
 
     @Test
