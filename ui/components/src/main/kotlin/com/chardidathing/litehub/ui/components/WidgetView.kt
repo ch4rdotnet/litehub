@@ -42,11 +42,12 @@ abstract class WidgetView(context: Context, protected val theme: ResolvedTheme) 
         val r = theme.radii.medium
         canvas.drawRoundRect(tile, r, r, tilePaint)
         drawContent(canvas)
-        if (badge != null) badgeBlock.draw(canvas, content.left, content.top)
+        if (badge != null) badgeBlock.draw(canvas, content.left + content.width() / 2, content.top)
     }
 
     private fun layoutBadge() {
         val text = badge ?: return
-        badgeBlock.set(text, theme.type.caption, theme.colors.onSurface, content.width().toInt(), Layout.Alignment.ALIGN_OPPOSITE)
+        // half the tile at most, a long reason shouldn't run over the content
+        badgeBlock.set(text, theme.type.caption, theme.colors.onSurface, (content.width() / 2).toInt(), Layout.Alignment.ALIGN_OPPOSITE)
     }
 }
