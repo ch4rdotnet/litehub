@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.view.ViewTreeObserver
 import com.chardidathing.litehub.ui.components.MessageView
 import com.chardidathing.litehub.ui.components.PageView
+import com.chardidathing.litehub.ui.widgets.EntityWidget
 import com.chardidathing.litehub.ui.widgets.WidgetCatalog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -19,13 +20,28 @@ import kotlinx.coroutines.withContext
 class MainActivity : Activity() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    private val loader by lazy { DashboardLoader(applicationContext) }
+    private val app get() = application as LitehubApp
+    private val loader by lazy { DashboardLoader(app) }
     private var loading: Job? = null
+    private var binder: PageBinder? = null
+    private var started = false
     private var reportedDrawn = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         load()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        started = true
+        binder?.start()
+    }
+
+    override fun onStop() {
+        started = false
+        binder?.stop()
+        super.onStop()
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -51,11 +67,21 @@ class MainActivity : Activity() {
 
     private fun show(screen: Screen) {
         val theme = screen.theme
+        binder?.stop()
+        binder = null
         // the window background is the dashboard background, so nothing else has to paint it
         window.setBackgroundDrawable(ColorDrawable(theme.colors.background))
         val view = when (screen) {
-            is Screen.Ready -> PageView(this, screen.page.columns, screen.page.rows, theme.spacing.m).apply {
-                for (p in screen.page.widgets) addWidget(WidgetCatalog.create(context, theme, p), p.x, p.y, p.w, p.h)
+            is Screen.Ready -> {
+                val page = PageView(this, screen.page.columns, screen.page.rows, theme.spacing.m)
+                val entityWidgets = ArrayList<EntityWidget>()
+                for (p in screen.page.widgets) {
+                    val widget = WidgetCatalog.create(this, theme, screen.icons, p)
+                    if (widget is EntityWidget) entityWidgets += widget
+                    page.addWidget(widget, p.x, p.y, p.w, p.h)
+                }
+                binder = PageBinder(app.ha, entityWidgets, scope).also { if (started) it.start() }
+                page
             }
             is Screen.Failed -> MessageView(this, theme, "config couldn't be loaded", screen.reason)
         }
@@ -65,7 +91,11 @@ class MainActivity : Activity() {
             view.viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
                 override fun onPreDraw(): Boolean {
                     view.viewTreeObserver.removeOnPreDrawListener(this)
-                    view.post { reportFullyDrawn() }
+                    view.post {
+                        reportFullyDrawn()
+                        // network waits until the cached dashboard is on screen
+                        app.ha.connect()
+                    }
                     return true
                 }
             })

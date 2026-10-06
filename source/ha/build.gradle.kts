@@ -20,7 +20,7 @@ android {
 dependencies {
     api(project(":core:model"))
     api(libs.kotlinx.coroutines.android)
-    implementation(libs.okhttp)
+    api(libs.okhttp)
     testImplementation(libs.junit)
     testImplementation(libs.mockwebserver)
 }

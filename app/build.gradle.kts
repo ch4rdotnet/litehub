@@ -32,6 +32,7 @@ android {
 
 dependencies {
     implementation(project(":core:config"))
+    implementation(project(":source:ha"))
     implementation(project(":ui:widgets"))
     implementation(libs.kotlinx.coroutines.android)
 }
