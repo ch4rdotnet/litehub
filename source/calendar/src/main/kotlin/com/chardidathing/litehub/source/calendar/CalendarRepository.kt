@@ -30,6 +30,8 @@ class CalendarRepository(
     private val ha: EntityRepository?,
     private val zone: () -> ZoneId = ZoneId::systemDefault,
     private val now: () -> Long = System::currentTimeMillis,
+    // failed fetches, for the hub's own log
+    private val log: (String) -> Unit = {},
 ) {
 
     private val confined = Dispatchers.IO.limitedParallelism(1)
@@ -92,7 +94,10 @@ class CalendarRepository(
                     if (events == null) store.unchanged(id, now(), day) else store.replace(id, events, now(), day)
                     windowDays[id] = day
                 },
-                onFailure = { store.failed(id, it.message ?: "couldn't fetch") },
+                onFailure = {
+                    store.failed(id, it.message ?: "couldn't fetch")
+                    log("calendar $id couldn't be fetched, ${it.message}")
+                },
             )
         } catch (e: SQLiteException) {
             // the data was fine, the cache couldn't take it, still worth showing next time

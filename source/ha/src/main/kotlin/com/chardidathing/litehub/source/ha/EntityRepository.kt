@@ -33,6 +33,8 @@ class EntityRepository(
     http: OkHttpClient,
     private val cache: EntityCache,
     private val timing: HaTiming = HaTiming(),
+    // connection changes, for the hub's own log
+    private val log: (String) -> Unit = {},
 ) {
 
     private val confined = Dispatchers.IO.limitedParallelism(1)
@@ -186,6 +188,24 @@ class EntityRepository(
 
     private fun JsonObject.str(key: String) = (this[key] as? JsonPrimitive)?.contentOrNull
 
+    // a websocket round trip, for the status page. null while not connected
+    suspend fun latencyMs(): Long? = withContext(confined) {
+        val c = client ?: return@withContext null
+        if (!_connected.value) return@withContext null
+        val start = System.nanoTime()
+        c.command("ping").getOrNull()
+        if (!_connected.value) null else (System.nanoTime() - start) / NANOS_PER_MS
+    }
+
+    // what the status page shows for the connection
+    fun statusText(): String = statusText(status)
+
+    private fun statusText(s: HaClient.Status): String = when (s) {
+        HaClient.Status.Connected -> "connected"
+        HaClient.Status.Connecting -> "connecting"
+        is HaClient.Status.Failed -> s.reason
+    }
+
     // every entity ha knows, named and grouped by area, for the editor's picker
     suspend fun catalogue(): Result<List<EntityChoice>> = withContext(confined) {
         val c = client ?: return@withContext Result.failure(IOException(statusReason()))
@@ -247,6 +267,7 @@ class EntityRepository(
         }
 
         override fun onStatus(status: HaClient.Status) {
+            if (status != this@EntityRepository.status) log("home assistant ${statusText(status)}")
             this@EntityRepository.status = status
             _connected.value = status is HaClient.Status.Connected
             if (status !is HaClient.Status.Connected) fresh.clear()
@@ -317,6 +338,7 @@ class EntityRepository(
     }
 
     private companion object {
+        const val NANOS_PER_MS = 1_000_000L
         const val CONNECTING = "connecting"
 
         val TOGGLE_DOMAINS = setOf("light", "switch", "fan", "input_boolean", "automation", "siren", "humidifier")

@@ -293,6 +293,8 @@ class HaClient(
                 listener.onEntities(EntityEvent(sub.requested, sub.initial, body))
                 sub.initial = false
             }
+            // a ping's answer has no success field, count arriving as success
+            "pong" -> pending.remove(id)?.complete(buildJsonObject { put("success", true) })
             "result" -> {
                 if (id == pushSubscription && (message["success"] as? JsonPrimitive)?.booleanOrNull == false) {
                     pushSubscription = null

@@ -23,6 +23,8 @@ class FeedRepository(
     private val fetcher: Fetcher,
     private val store: FeedStore,
     private val now: () -> Long = System::currentTimeMillis,
+    // failed fetches, for the hub's own log
+    private val log: (String) -> Unit = {},
 ) {
 
     private val confined = Dispatchers.IO.limitedParallelism(1)
@@ -66,7 +68,10 @@ class FeedRepository(
         try {
             result.fold(
                 onSuccess = { items -> if (items == null) store.unchanged(id, now()) else store.replace(id, items, now()) },
-                onFailure = { store.failed(id, it.message ?: "couldn't fetch") },
+                onFailure = {
+                    store.failed(id, it.message ?: "couldn't fetch")
+                    log("feed $id couldn't be fetched, ${it.message}")
+                },
             )
         } catch (e: SQLiteException) {
             // the data was fine, the cache couldn't take it
