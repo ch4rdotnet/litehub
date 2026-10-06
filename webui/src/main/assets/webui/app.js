@@ -21,8 +21,8 @@ $("login-form").onsubmit = async (e) => {
   if (r.ok) { $("login").hidden = true; start(); } else say("login-error", await r.text(), true);
 };
 
-document.querySelectorAll("nav button").forEach((b) => b.onclick = () => {
-  document.querySelectorAll("nav button").forEach((x) => x.classList.toggle("on", x === b));
+document.querySelectorAll("header nav button").forEach((b) => b.onclick = () => {
+  document.querySelectorAll("header nav button").forEach((x) => x.classList.toggle("on", x === b));
   document.querySelectorAll(".tab").forEach((t) => t.hidden = t.id !== "tab-" + b.dataset.tab);
   if (b.dataset.tab === "json") $("json").value = JSON.stringify(config, null, 2);
 });
@@ -36,6 +36,7 @@ async function start() {
   dash = Math.max(0, config.dashboards.findIndex((d) => d.id === config.activeDashboard));
   $("add-type").innerHTML = schemas.map((s) => `<option value="${s.type}">${s.name}</option>`).join("");
   loadConnections();
+  loadSettings();
   api("/api/entities").then((t) => { entities = JSON.parse(t); drawSettings(); }).catch(() => {});
   render();
   refreshPreview();
@@ -123,13 +124,8 @@ function drawSettings() {
   form.oninput = form.onchange = () => {
     const out = {};
     for (const f of schema.fields) {
-      if (f.kind === "calendars" || f.kind === "feeds") {
-        const ids = [...form.querySelectorAll(`[name="${f.key}"]:checked`)].map((c) => c.value);
-        if (ids.length) out[f.key] = ids;
-      } else {
-        const v = form.querySelector(`[name="${f.key}"]`).value.trim();
-        if (v) out[f.key] = f.kind === "number" ? Number(v) : v;
-      }
+      const v = readField(form, f);
+      if (v !== undefined && !(Array.isArray(v) && !v.length)) out[f.key] = v;
     }
     w.config = out;
     drawGrid();
@@ -146,15 +142,80 @@ function field(f, values) {
     return `<label>${f.label}</label><div class="checks">` + list.map((s) =>
       `<label><input type="checkbox" name="${f.key}" value="${s.id}" ${chosen.includes(s.id) ? "checked" : ""}>${s.name}</label>`).join("") + `</div>`;
   }
-  const type = f.kind === "number" ? "number" : "text";
-  const value = String(v).replace(/"/g, "&quot;");
+  const value = String(Array.isArray(v) ? v.join(", ") : v).replace(/"/g, "&quot;");
   const label = f.label + (f.required ? " (needed)" : "");
-  if (f.kind !== "entity") return `<label>${label}<input name="${f.key}" type="${type}" value="${value}"></label>`;
+  if (f.kind === "toggle") return `<label class="toggle"><input type="checkbox" name="${f.key}" ${v === true ? "checked" : ""}>${label}</label>`;
+  if (f.kind === "choice") return `<label>${label}<select name="${f.key}">` +
+    f.options.map((o) => `<option value="${o.value}" ${o.value === v ? "selected" : ""}>${o.label}</option>`).join("") + `</select></label>`;
+  if (f.kind === "number") return `<label>${label}<input name="${f.key}" type="number" step="any" min="${f.min ?? ""}" max="${f.max ?? ""}" value="${value}"></label>`;
+  if (f.kind === "time") return `<label>${label}<input name="${f.key}" type="time" value="${value}"></label>`;
+  if (f.kind === "secret") return `<label>${label}<input name="${f.key}" type="password" autocomplete="off" placeholder="leave blank to keep it"></label>`;
+  if (f.kind !== "entity" && f.kind !== "entities") return `<label>${label}<input name="${f.key}" value="${value}"></label>`;
   // suggestions only from the domains the field can use, the same filter as the hub's own picker
   const fit = entities.filter((e) => !f.domains || !f.domains.length || f.domains.includes(e.id.split(".")[0]));
   const options = fit.map((e) => `<option value="${e.id}">${e.name}${e.area ? " · " + e.area : ""}</option>`).join("");
-  return `<label>${label}<input name="${f.key}" list="entities-${f.key}" value="${value}"><datalist id="entities-${f.key}">${options}</datalist></label>`;
+  const hint = f.kind === "entities" ? ` placeholder="ids, comma between them"` : "";
+  return `<label>${label}<input name="${f.key}" list="entities-${f.key}" value="${value}"${hint}><datalist id="entities-${f.key}">${options}</datalist></label>`;
 }
+
+// what a field's control holds now, undefined when it's blank
+function readField(form, f) {
+  if (f.kind === "calendars" || f.kind === "feeds") return [...form.querySelectorAll(`[name="${f.key}"]:checked`)].map((c) => c.value);
+  const el = form.querySelector(`[name="${f.key}"]`);
+  if (f.kind === "toggle") return el.checked;
+  const v = el.value.trim();
+  if (f.kind === "entities") return v.split(",").map((s) => s.trim()).filter(Boolean);
+  if (!v) return undefined;
+  return f.kind === "number" ? Number(v) : v;
+}
+
+// the hub's own settings, the same sections and fields as its settings screen. edits are kept
+// across sections until save or cancel, the hub checks them the same way the screen does
+let hubSettings = null, settingsEdits = {}, settingsSection = 0;
+
+async function loadSettings() {
+  try {
+    hubSettings = JSON.parse(await api("/api/settings"));
+    settingsEdits = { ...hubSettings.values };
+    drawSettingsSections();
+  } catch (e) { say("settings-message", e.message, true); }
+}
+
+function drawSettingsSections() {
+  const list = $("settings-sections");
+  list.innerHTML = hubSettings.sections.map((s, i) => `<button type="button" data-i="${i}" class="${i === settingsSection ? "on" : ""}">${s.name}</button>`).join("");
+  list.querySelectorAll("button").forEach((b) => b.onclick = () => { settingsSection = Number(b.dataset.i); drawSettingsSections(); });
+  drawSettingsFields();
+}
+
+const shownWith = (f, values) => Object.entries(f.showIf || {}).every(([k, want]) => String(values[k]) === want);
+
+function drawSettingsFields() {
+  const section = hubSettings.sections[settingsSection], form = $("settings-form");
+  form.innerHTML = `<h2>${section.name}</h2>` + section.fields.map((f) => `<div data-key="${f.key}">${field(f, settingsEdits)}</div>`).join("");
+  const refresh = () => section.fields.forEach((f) => { form.querySelector(`[data-key="${f.key}"]`).hidden = !shownWith(f, settingsEdits); });
+  form.oninput = form.onchange = () => {
+    for (const f of section.fields) {
+      const v = readField(form, f);
+      if (v === undefined) delete settingsEdits[f.key]; else settingsEdits[f.key] = v;
+    }
+    refresh();
+  };
+  refresh();
+}
+
+$("settings-save").onclick = async () => {
+  try {
+    await api("/api/settings", { method: "PUT", body: JSON.stringify(settingsEdits) });
+    say("settings-message", "saved, the hub uses it straight away", false);
+    loadSettings();
+  } catch (e) { say("settings-message", e.message, true); }
+};
+$("settings-cancel").onclick = () => {
+  settingsEdits = { ...hubSettings.values };
+  say("settings-message", "", false);
+  drawSettingsFields();
+};
 
 function freeSpot(p, w, h) {
   for (const [ww, hh] of [[w, h], [1, 1]]) for (let y = 0; y < p.rows; y++) for (let x = 0; x < p.columns; x++)
@@ -235,7 +296,6 @@ async function loadConnections() {
     const ha = JSON.parse(await api("/api/ha"));
     $("ha-url").value = ha.url || "";
     $("ha-token").placeholder = ha.tokenSet ? "set, leave empty to keep it" : "not set";
-    $("screensaver").value = await api("/api/screensaver");
     const text = await api("/api/sources");
     $("sources").value = text;
     sources = JSON.parse(text);
@@ -249,13 +309,8 @@ $("ha-form").onsubmit = async (e) => {
     $("ha-token").value = "";
     say("ha-message", "saved, the hub reconnects with it", false);
     loadConnections();
+  loadSettings();
   } catch (e) { say("ha-message", e.message, true); }
-};
-$("screensaver-save").onclick = async () => {
-  try {
-    await api("/api/screensaver", { method: "PUT", body: $("screensaver").value });
-    say("screensaver-message", "saved, the hub uses it straight away", false);
-  } catch (e) { say("screensaver-message", e.message, true); }
 };
 $("sources-save").onclick = async () => {
   try {

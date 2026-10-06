@@ -13,6 +13,7 @@
   <nav>
     <button data-tab="layout" class="on">layout</button>
     <button data-tab="json">json</button>
+    <button data-tab="settings">settings</button>
     <button data-tab="connections">connections</button>
     <a href="/status" target="_blank">status</a>
   </nav>
@@ -68,6 +69,20 @@
     <p id="json-message"></p>
   </section>
 
+  <section id="tab-settings" class="tab" hidden>
+    <div class="settings">
+      <div id="settings-sections" class="sections"></div>
+      <div>
+        <form id="settings-form"></form>
+        <div class="bar">
+          <button id="settings-save" class="primary">save to hub</button>
+          <button id="settings-cancel">cancel</button>
+        </div>
+        <p id="settings-message"></p>
+      </div>
+    </div>
+  </section>
+
   <section id="tab-connections" class="tab" hidden>
     <h2>home assistant</h2>
     <form id="ha-form">
@@ -76,12 +91,6 @@
       <button class="primary">save</button>
     </form>
     <p id="ha-message"></p>
-    <h2>screensaver and night</h2>
-    <p class="muted">idleMinutes, photos (one of folder, immich {url, apiKey, albumId} or haMedia), photoSeconds,
-      night {start, end, mode dim or blank, dimPercent}, wakeEntities, lightWake, cameraWake</p>
-    <textarea id="screensaver" class="short" spellcheck="false"></textarea>
-    <div class="bar"><button id="screensaver-save" class="primary">save</button></div>
-    <p id="screensaver-message"></p>
     <h2>calendars and feeds (sources.json)</h2>
     <textarea id="sources" spellcheck="false"></textarea>
     <div class="bar"><button id="sources-save" class="primary">save</button></div>

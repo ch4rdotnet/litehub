@@ -68,8 +68,8 @@ class WebServer(port: Int, private val access: HubAccess, private val assets: As
             s.method == NanoHTTPD.Method.PUT && path == "/api/config" -> saved(access.saveConfig(body(s)))
             get && path == "/api/sources" -> json(access.sources())
             s.method == NanoHTTPD.Method.PUT && path == "/api/sources" -> saved(access.saveSources(body(s)))
-            get && path == "/api/screensaver" -> json(access.screensaver())
-            s.method == NanoHTTPD.Method.PUT && path == "/api/screensaver" -> saved(access.saveScreensaver(body(s)))
+            get && path == "/api/settings" -> json(access.settings())
+            s.method == NanoHTTPD.Method.PUT && path == "/api/settings" -> saved(access.saveSettings(body(s)))
             get && path == "/api/ha" -> json(access.ha())
             s.method == NanoHTTPD.Method.PUT && path == "/api/ha" -> {
                 val params = runCatching { Json.parseToJsonElement(body(s)) }.getOrNull() as? JsonObject

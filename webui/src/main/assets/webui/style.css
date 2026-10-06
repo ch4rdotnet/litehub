@@ -2,6 +2,7 @@
    the editor's own page layout values live here, once */
 :root {
   --editor-split: 2fr 1fr;
+  --settings-split: 1fr 3fr;
   --editor-field: 40em;
   --editor-text-height: 70vh;
   --editor-short-height: 30vh;
@@ -46,7 +47,12 @@ aside img { width: 100%; border-radius: var(--radius); background: var(--surface
 .muted { color: var(--on-background); }
 .file input { display: none; }
 .file { background: var(--surface); border-radius: var(--radius); padding: var(--space-s) var(--space-m); cursor: pointer; }
+.settings { display: grid; grid-template-columns: var(--settings-split); gap: var(--space-l); margin-top: var(--space-l); }
+.sections { display: flex; flex-direction: column; gap: var(--space-s); }
+#settings-form label { display: block; margin: var(--space-s) 0; }
+#settings-form input:not([type=checkbox]), #settings-form select { display: block; width: 100%; max-width: var(--editor-field); }
+#settings-form label.toggle { display: flex; gap: var(--space-s); align-items: center; }
 #tab-connections label { display: block; margin: var(--space-s) 0; }
 #tab-connections input { width: 100%; max-width: var(--editor-field); }
 /* css variables can't be used in a media query, so the one breakpoint stays here */
-@media (max-width: 900px) { .split { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .split, .settings { grid-template-columns: 1fr; } }

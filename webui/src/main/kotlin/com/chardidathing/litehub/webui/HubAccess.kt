@@ -23,10 +23,12 @@ interface HubAccess {
     // a null token keeps the one already there
     fun saveHa(url: String, token: String?): Result<Unit>
 
-    // the screensaver block of settings.json, photo source, night window, wake sensors
-    fun screensaver(): String
+    // the hub's own settings as the form both settings screens draw, {"sections": [...], "values": {...}}.
+    // secrets come back blank
+    fun settings(): String
 
-    fun saveScreensaver(text: String): Result<Unit>
+    // flat key to value edits, checked like the device's own settings screen checks them
+    fun saveSettings(text: String): Result<Unit>
 
     fun schemas(): String
 
