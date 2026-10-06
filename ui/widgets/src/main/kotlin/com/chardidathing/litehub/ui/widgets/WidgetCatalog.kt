@@ -55,6 +55,8 @@ object WidgetCatalog {
             } ?: broken(context, theme, "$type config isn't valid", "see the $type widget's fields")
             "todo" -> decode(placement, TodoConfig.serializer())?.let { TodoWidget(context, theme, icons, it) }
                 ?: broken(context, theme, "list config isn't valid", "it needs a todo entity")
+            "entities" -> decode(placement, EntitiesConfig.serializer())?.let { EntitiesWidget(context, theme, icons, it) }
+                ?: broken(context, theme, "entities config isn't valid", "it takes a list of entity ids")
             "notifications" -> decode(placement, NotificationsConfig.serializer())?.let { NotificationsWidget(context, theme, it) }
                 ?: broken(context, theme, "notifications config isn't valid", "it only takes a title")
             // shown as a failure, not dropped, so a typo in the config is visible on screen

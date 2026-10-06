@@ -6,6 +6,7 @@ import com.chardidathing.litehub.source.ha.EntityRepository
 import com.chardidathing.litehub.ui.components.WidgetView
 import com.chardidathing.litehub.ui.widgets.CalendarWidget
 import com.chardidathing.litehub.ui.widgets.EntityWidget
+import com.chardidathing.litehub.ui.widgets.EntitiesWidget
 import com.chardidathing.litehub.ui.widgets.FeedWidget
 import com.chardidathing.litehub.ui.widgets.Moment
 import com.chardidathing.litehub.ui.widgets.NotificationsWidget
@@ -42,6 +43,10 @@ class DashboardBinder(
             // failures come back through the snapshot, so there's nothing to handle here
             if (ha.canToggle(id)) widget.onTap = { scope.launch { ha.toggle(id) } }
         }
+        for (group in pages.flatten().filterIsInstance<EntitiesWidget>()) {
+            group.canTap = ha::canToggle
+            group.onTap = { id -> scope.launch { ha.toggle(id) } }
+        }
         for (panel in pages.flatten().filterIsInstance<NotificationsWidget>()) {
             panel.onRemove = notifications::remove
             panel.onClear = notifications::clear
@@ -64,6 +69,7 @@ class DashboardBinder(
         }
         val onScreen = pages.getOrNull(page).orEmpty()
         val entities = onScreen.filterIsInstance<EntityWidget>().map { it.config.entity } +
+            onScreen.filterIsInstance<EntitiesWidget>().flatMap { it.config.entities } +
             onScreen.filterIsInstance<WeatherWidget>().mapNotNull { it.config.entity }
         ha.setVisible(entities.toSet())
     }
@@ -81,6 +87,9 @@ class DashboardBinder(
         is FeedWidget -> scope.launch { combine(feeds.snapshot, now, ::Pair).collect { (s, m) -> widget.show(s, m) } }
         is WeatherWidget -> scope.launch {
             combine(weather.watch(weather.key(widget.config.entity)), now, ::Pair).collect { (s, m) -> widget.show(s, m) }
+        }
+        is EntitiesWidget -> scope.launch {
+            for (id in widget.config.entities.distinct()) launch { ha.snapshot(id).collect { widget.show(id, it) } }
         }
         is NotificationsWidget -> scope.launch { combine(notifications.items, now, ::Pair).collect { (n, m) -> widget.show(n, m) } }
         is TodoWidget -> scope.launch {

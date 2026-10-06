@@ -15,6 +15,8 @@ data class WidgetSchema(
     val w: Int,
     val h: Int,
     val fields: List<SchemaField>,
+    // one line for the add widget lists, what it shows
+    val description: String = "",
 )
 
 // domains limits an entity field to those ha domains, empty means any. min and max bound a
