@@ -4,6 +4,7 @@ import com.chardidathing.litehub.core.model.DeviceSettings
 import com.chardidathing.litehub.core.model.ScreensaverSettings
 import java.time.LocalTime
 import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.Json
 
 object SettingsCodec {
 
@@ -25,6 +26,24 @@ object SettingsCodec {
         validate(settings.screensaver)
         return settings
     }
+
+    // just the screensaver block, for the web editor, checked like a whole file would be
+    fun decodeScreensaver(text: String): ScreensaverSettings {
+        val s = try {
+            ConfigCodec.json.decodeFromString(ScreensaverSettings.serializer(), text)
+        } catch (e: SerializationException) {
+            throw ConfigException("screensaver settings aren't valid, ${e.summary()}", e)
+        } catch (e: IllegalArgumentException) {
+            throw ConfigException("screensaver settings aren't valid, ${e.summary()}", e)
+        }
+        validate(s)
+        return s
+    }
+
+    // defaults written out, the web editor shows every setting there is to change
+    fun encodeScreensaver(s: ScreensaverSettings): String = withDefaults.encodeToString(ScreensaverSettings.serializer(), s)
+
+    private val withDefaults = Json(ConfigCodec.json) { encodeDefaults = true }
 
     // "HH:mm", null when it isn't one
     fun time(text: String): LocalTime? = runCatching { LocalTime.parse(text) }.getOrNull()

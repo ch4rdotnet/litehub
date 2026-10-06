@@ -36,6 +36,9 @@ data class Moment(val nowMs: Long, val zone: ZoneId, val hour24: Boolean, val lo
         return DateTimeFormatter.ofPattern(if (hour24) "H" else "ha", locale).format(t).lowercase(locale)
     }
 
+    // "wednesday 7 october", for the screensaver
+    fun longDate(): String = DateTimeFormatter.ofPattern("EEEE d MMMM", locale).format(today).lowercase(locale)
+
     fun month(date: LocalDate): String = DateTimeFormatter.ofPattern("MMMM yyyy", locale).format(date).lowercase(locale)
 
     // how long ago, as short as it can be
