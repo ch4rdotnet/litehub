@@ -26,6 +26,8 @@ class ResolvedTheme(theme: Theme, metrics: DisplayMetrics, fonts: Fonts) {
         large = dp(theme.radii.large, metrics),
     )
 
+    val iconSize = dp(theme.iconSize, metrics)
+
     val type = with(theme.type) {
         fun r(style: TextStyle) = Text(
             size = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, style.size, metrics),

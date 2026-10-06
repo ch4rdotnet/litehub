@@ -9,6 +9,7 @@
   },
   "spacing": { "xs": 4, "s": 8, "m": 16, "l": 24, "xl": 32 },
   "radii": { "small": 4, "medium": 4, "large": 0 },
+  "iconSize": 32,
   "font": "lexend",
   "type": {
     "h1": { "size": 96, "weight": 300 }, "h2": { "size": 60, "weight": 300 },

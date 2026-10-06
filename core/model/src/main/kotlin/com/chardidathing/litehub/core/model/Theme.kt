@@ -24,6 +24,8 @@ data class Theme(
     val colors: Colors,
     val spacing: Spacing,
     val radii: Radii,
+    // dp, square
+    val iconSize: Float,
     val font: String,
     val type: TypeScale,
 )

@@ -16,6 +16,9 @@ object Presets {
     private val radii = Radii(small = 4f, medium = 4f, large = 0f)
 
     // md2 type scale, light (300) falls back to the nearest bundled weight
+    // md2 says 24, a wall panel is read from further away
+    private val iconSize = 32f
+
     private val type = TypeScale(
         h1 = TextStyle(size = 96f, weight = 300),
         h2 = TextStyle(size = 60f, weight = 300),
@@ -52,6 +55,7 @@ object Presets {
         ),
         spacing = spacing,
         radii = radii,
+        iconSize = iconSize,
         font = Fonts.LEXEND,
         type = type,
     )
@@ -76,6 +80,7 @@ object Presets {
         ),
         spacing = spacing,
         radii = radii,
+        iconSize = iconSize,
         font = Fonts.LEXEND,
         type = type,
     )
