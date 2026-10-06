@@ -53,6 +53,11 @@ textarea.short { height: var(--editor-short-height); }
 .box:hover { border-color: var(--on-surface); }
 .slot.picked .box { border-color: var(--primary); }
 .kind { font-size: var(--body2); color: var(--primary); }
+/* the hub's own drawing of a tile fills it, the type and size only show on hover or when picked */
+.box.has-shot { padding: 0; background: transparent; }
+.shot { width: 100%; height: 100%; display: block; border-radius: var(--radius); pointer-events: none; }
+.tag { position: absolute; left: var(--space-s); top: var(--space-s); background: var(--primary); color: var(--on-primary); border-radius: var(--radius-small); padding: 0 var(--space-xs); font-size: var(--body2); opacity: 0; }
+.box:hover .tag, .slot.picked .tag, .slot.dragging .tag { opacity: 1; }
 .box strong { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .box small { font-size: var(--body2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .size { position: absolute; right: var(--space-s); top: var(--space-s); font-size: var(--body2); }

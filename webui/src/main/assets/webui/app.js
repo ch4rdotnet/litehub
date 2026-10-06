@@ -48,6 +48,7 @@ async function start() {
   render();
   refreshPreview();
   setInterval(refreshPreview, 30000);
+  setInterval(refreshShots, 30000);
 }
 
 function refreshPreview() { $("preview").src = "/api/preview.png?t=" + Date.now(); }
@@ -153,8 +154,85 @@ function put(el, w, p) {
   el.style.height = `${w.h / p.rows * 100}%`;
 }
 
-// what a tile says about itself, its type, a name and a hint of what's in it
-function tileHtml(w) {
+// tiles drawn by the hub itself. a preview is keyed by everything that changes how the tile
+// looks (not where it sits), asked for after typing settles, two at a time, the hub isn't quick
+const TILE_SETTLE_MS = 300, TILE_REQUESTS = 2, TILE_KEEP = 200;
+const tileShots = new Map(), tileWanted = new Set(), tileWaiting = new Set();
+let tileQueue = [], tileBusy = 0, tileTimer = 0, dragging = false;
+
+function tileRequest(w, p) {
+  return JSON.stringify({ placement: { x: 0, y: 0, w: w.w, h: w.h, type: w.type, config: w.config || {} },
+    columns: p.columns, rows: p.rows, density: p.density || "comfortable", theme: board().theme, themes: config.themes || [] });
+}
+
+// the preview if there is one yet, asking for it if not
+function shotFor(w, p) {
+  const key = tileRequest(w, p);
+  if (!tileShots.has(key)) wantShot(key);
+  return tileShots.get(key);
+}
+
+function wantShot(key) {
+  if (tileWaiting.has(key)) return;
+  tileWanted.add(key);
+  clearTimeout(tileTimer);
+  tileTimer = setTimeout(() => {
+    for (const k of tileWanted) { tileWaiting.add(k); tileQueue.push(k); }
+    tileWanted.clear();
+    pumpShots();
+  }, TILE_SETTLE_MS);
+}
+
+function pumpShots() {
+  while (tileBusy < TILE_REQUESTS && tileQueue.length) {
+    const key = tileQueue.shift();
+    tileBusy++;
+    fetch("/api/tile.png", { method: "POST", body: key })
+      .then((r) => (r.ok ? r.blob() : null))
+      .then((blob) => {
+        if (!blob) return;
+        const old = tileShots.get(key);
+        tileShots.delete(key);
+        tileShots.set(key, URL.createObjectURL(blob));
+        if (old) URL.revokeObjectURL(old);
+        // the oldest go once there are plenty, every edit makes a new one
+        while (tileShots.size > TILE_KEEP) {
+          const [k, url] = tileShots.entries().next().value;
+          URL.revokeObjectURL(url);
+          tileShots.delete(k);
+        }
+        showShots();
+      })
+      .catch(() => {})
+      .finally(() => { tileBusy--; tileWaiting.delete(key); pumpShots(); });
+  }
+}
+
+// mid drag the grid isn't redrawn, the images that are there just swap
+function showShots() {
+  if (!dragging) return drawGrid();
+  const p = current();
+  document.querySelectorAll("#grid .slot").forEach((slot) => {
+    const w = p.widgets[slot.dataset.i], img = slot.querySelector("img.shot"), url = w && tileShots.get(tileRequest(w, p));
+    if (img && url && img.src !== url) img.src = url;
+  });
+}
+
+// every tile on the page drawn again, live data moves on. the old picture stays until the new one lands
+function refreshShots() {
+  const p = current();
+  p.widgets.forEach((w) => wantShot(tileRequest(w, p)));
+}
+
+// what a tile says about itself, the hub's drawing of it once there is one, otherwise its type,
+// a name and a hint of what's in it
+function tileHtml(w, p) {
+  const shot = shotFor(w, p);
+  if (shot) {
+    const schema = schemaOf(w.type);
+    return `<div class="box has-shot"><img class="shot" src="${shot}" alt="" draggable="false">` +
+      `<span class="tag">${esc(schema ? schema.name : w.type)} · ${w.w} by ${w.h}</span><div class="handle"></div></div>`;
+  }
   const schema = schemaOf(w.type);
   const c = w.config || {};
   const title = c.title || c.name || entityName(c.entity) || c.entity || "";
@@ -180,7 +258,7 @@ function drawGrid() {
     slot.className = "slot" + (i === picked ? " picked" : "");
     slot.dataset.i = i;
     put(slot, w, p);
-    slot.innerHTML = tileHtml(w);
+    slot.innerHTML = tileHtml(w, p);
     slot.onpointerdown = (e) => drag(e, i, e.target.classList.contains("handle"));
     grid.appendChild(slot);
   });
@@ -200,7 +278,7 @@ function drag(e, i, resizing) {
   slot.onpointermove = (m) => {
     const px = m.clientX - x0, py = m.clientY - y0;
     if (!moved && Math.abs(px) + Math.abs(py) < DRAG_SLOP) return;
-    if (!moved) { moved = true; slot.classList.add("dragging"); ghost.hidden = false; }
+    if (!moved) { moved = true; dragging = true; slot.classList.add("dragging"); ghost.hidden = false; }
     const dx = Math.round(px / cellW), dy = Math.round(py / cellH);
     const next = resizing ? { ...start, w: Math.max(1, start.w + dx), h: Math.max(1, start.h + dy) } : { ...start, x: start.x + dx, y: start.y + dy };
     result = arrange(before, i, next, p);
@@ -216,6 +294,7 @@ function drag(e, i, resizing) {
   };
   slot.onpointerup = slot.onpointercancel = () => {
     slot.onpointermove = slot.onpointerup = slot.onpointercancel = null;
+    dragging = false;
     if (moved && result) {
       remember();
       p.widgets = result;
