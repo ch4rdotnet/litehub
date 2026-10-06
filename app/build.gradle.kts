@@ -44,5 +44,6 @@ dependencies {
     implementation(project(":ui:widgets"))
     implementation(project(":ui:editor"))
     implementation(project(":webui"))
+    implementation(project(":dlna"))
     implementation(libs.kotlinx.coroutines.android)
 }

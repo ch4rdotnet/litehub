@@ -10,6 +10,10 @@ import android.view.View
 import android.view.WindowManager
 import com.chardidathing.litehub.core.config.ConfigCodec
 import com.chardidathing.litehub.ui.components.NoticeStack
+import com.chardidathing.litehub.ui.components.NowPlayingView
+import com.chardidathing.litehub.ui.components.VideoFrame
+import com.chardidathing.litehub.dlna.RendererState
+import com.chardidathing.litehub.dlna.Transport
 import com.chardidathing.litehub.ui.components.ScreensaverView
 import com.chardidathing.litehub.ui.components.ShadeView
 import com.chardidathing.litehub.ui.widgets.NotificationsConfig
@@ -22,6 +26,9 @@ import android.view.inputmethod.InputMethodManager
 import java.io.File
 import android.os.Bundle
 import android.widget.FrameLayout
+import android.widget.LinearLayout
+import android.net.Uri
+import android.util.Size
 import android.view.ViewTreeObserver
 import com.chardidathing.litehub.ui.components.MessageView
 import com.chardidathing.litehub.ui.components.PageView
@@ -47,6 +54,7 @@ class MainActivity : Activity() {
         // a notification banner stays this long unless it's tapped away
         const val NOTICE_MS = 5_000L
         const val MAX_NOTICES = 7
+        val ACTIVE = setOf(Transport.TRANSITIONING, Transport.PLAYING, Transport.PAUSED)
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -90,6 +98,8 @@ class MainActivity : Activity() {
             }
         }
         scope.launch(Dispatchers.IO) { app.web.apply() }
+        scope.launch(Dispatchers.IO) { app.dlna.apply() }
+        scope.launch { combine(app.dlna.renderer.state, app.dlna.playback.video, ::Pair).collect { (s, size) -> showMedia(s, size) } }
         load()
     }
 
@@ -159,6 +169,8 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        // the video goes with the activity, the screensaver mustn't stay held for it
+        if (video != null) app.screensaver.hold(false)
         tts?.shutdown()
         chime.release()
         scope.cancel()
@@ -299,16 +311,64 @@ class MainActivity : Activity() {
             onClear = app.notifications::clear
         }
         shadeJob = scope.launch { combine(app.notifications.items, ticker.now, ::Pair).collect { (n, m) -> list.show(n, m) } }
-        val view = ShadeView(this, theme, list) { closeShadeNow() }
+        val renderer = app.dlna.renderer
+        val playing = NowPlayingView(
+            this,
+            theme,
+            onToggle = { scope.launch(Dispatchers.IO) { renderer.togglePause() } },
+            onStop = { scope.launch(Dispatchers.IO) { renderer.stopHere() } },
+        )
+        nowPlaying = playing
+        bindNowPlaying()
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(playing, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                bottomMargin = theme.spacing.m.toInt()
+            })
+            addView(list, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+        }
+        val view = ShadeView(this, theme, content) { closeShadeNow() }
         shade = view
         root.addView(view)
         view.open()
     }
 
     private fun closeShadeNow() {
+        nowPlaying = null
         shadeJob?.cancel()
         shade?.let(root::removeView)
         shade = null
+    }
+
+    // dlna media. a video covers the dashboard, audio only shows up in the shade
+    private var video: VideoFrame? = null
+    private var nowPlaying: NowPlayingView? = null
+    private var media: Pair<RendererState, Size?> = RendererState() to null
+
+    private fun showMedia(state: RendererState, size: Size?) {
+        media = state to size
+        val show = state.transport in ACTIVE && size != null
+        val frame = video
+        if (show && frame == null) {
+            val next = VideoFrame(this, app.dlna.playback::attach) { scope.launch(Dispatchers.IO) { app.dlna.renderer.stopHere() } }
+            video = next
+            root.addView(next)
+            app.screensaver.hold(true)
+        } else if (!show && frame != null) {
+            root.removeView(frame)
+            video = null
+            app.screensaver.hold(false)
+        }
+        video?.videoSize = size
+        bindNowPlaying()
+    }
+
+    private fun bindNowPlaying() {
+        val view = nowPlaying ?: return
+        val s = media.first
+        view.visibility = if (s.transport in ACTIVE) View.VISIBLE else View.GONE
+        val title = s.track?.title ?: Uri.parse(s.uri).lastPathSegment ?: s.uri
+        view.show(title, s.track?.artist, playing = s.transport == Transport.PLAYING)
     }
 
     // a finger that starts on the top edge and pulls down opens the shade instead of touching the page
@@ -457,8 +517,9 @@ class MainActivity : Activity() {
                 }
             }
         }
-        root.removeAllViews()
-        root.addView(view)
+        // everything but a playing video, taking its surface away would end it
+        for (i in root.childCount - 1 downTo 0) if (root.getChildAt(i) !== video) root.removeViewAt(i)
+        root.addView(view, 0)
         screenOff = null
         notices = null
         closeShadeNow()

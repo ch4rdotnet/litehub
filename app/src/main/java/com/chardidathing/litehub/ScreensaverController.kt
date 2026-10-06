@@ -49,6 +49,7 @@ class ScreensaverController(private val app: LitehubApp, private val scope: Coro
     private val light by lazy { LightWake(app) { wake("the light changed") } }
     private val camera by lazy { CameraMotion(app) { wake("motion") } }
     private var adminLocked = false
+    private var held = false
 
     fun start() {
         if (ticking != null) return
@@ -86,6 +87,16 @@ class ScreensaverController(private val app: LitehubApp, private val scope: Coro
         set(Mode.AWAKE)
     }
 
+    // a video playing keeps the screen awake, the idle clock restarts when it's done
+    fun hold(on: Boolean) {
+        if (on == held) return
+        held = on
+        if (on) wake("video") else {
+            lastInteraction = System.currentTimeMillis()
+            evaluate()
+        }
+    }
+
     fun force(m: Mode) {
         forced = m
         set(m)
@@ -97,6 +108,7 @@ class ScreensaverController(private val app: LitehubApp, private val scope: Coro
         val idle = now - lastInteraction >= s.idleMinutes * MINUTE_MS
         val night = s.night?.takeIf { inWindow(it.start, it.end) }
         val target = forced ?: when {
+            held -> Mode.AWAKE
             idle && night != null -> if (night.mode == NightMode.BLANK) Mode.BLANK else Mode.DIMMED
             idle && s.enabled -> Mode.SCREENSAVER
             else -> Mode.AWAKE

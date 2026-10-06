@@ -90,6 +90,17 @@ class AdminFlow(
                     menu()
                 }
             })
+            add((if (app.settings.dlna.enabled) "dlna renderer: on" else "dlna renderer: off") to {
+                scope.launch {
+                    withContext(Dispatchers.IO) {
+                        val d = app.settings.dlna
+                        // the uuid is made once and kept, ha knows the renderer by it
+                        app.saveSettings(app.settings.copy(dlna = d.copy(enabled = !d.enabled, uuid = d.uuid ?: java.util.UUID.randomUUID().toString())))
+                        app.dlna.apply()
+                    }
+                    menu()
+                }
+            })
             val web = app.settings.web
             add((if (web.editor) "web editor: on" else "web editor: off") to { toggleWeb { it.copy(editor = !it.editor) } })
             add((if (web.status) "status page: on" else "status page: off") to { toggleWeb { it.copy(status = !it.status) } })

@@ -12,6 +12,8 @@
     <!-- a photo folder on the device, asked for when one is set -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <!-- dlna discovery is multicast, most wifi drivers drop it unless asked not to -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
 
     <application
         android:name=".LitehubApp"

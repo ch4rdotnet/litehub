@@ -56,6 +56,8 @@ class LitehubApp : Application() {
 
     val notifications by lazy { NotificationCenter(filesDir, scope) }
 
+    val dlna by lazy { DlnaHost(this) }
+
     // what's on screen, for the status page
     data class HubState(val dashboard: String = "", val page: Int = 1, val screenOn: Boolean = true)
 
