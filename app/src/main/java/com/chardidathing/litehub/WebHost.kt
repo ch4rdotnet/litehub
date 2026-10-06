@@ -130,6 +130,10 @@ class WebHost(private val app: LitehubApp) : HubAccess {
         Json.encodeToString(ListSerializer(com.chardidathing.litehub.core.model.EntityChoice.serializer()), list)
     }
 
+    private val tiles = TilePreview(app)
+
+    override suspend fun tilePreview(body: String): ByteArray? = tiles.png(body, activity.get())
+
     // drawn in software at half size, the hub's own screen isn't touched
     override fun preview(): ByteArray? {
         val a = activity.get() ?: return null

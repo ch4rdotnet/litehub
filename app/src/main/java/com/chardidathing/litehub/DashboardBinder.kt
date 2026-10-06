@@ -87,6 +87,10 @@ class DashboardBinder(
         ha.setVisible(emptySet())
     }
 
+    // one widget fed without the page bookkeeping, for tile previews. it leaves what ha sends
+    // the live dashboard alone
+    fun preview(widget: WidgetView): Job? = bind(widget)
+
     private fun bind(widget: WidgetView): Job? = when (widget) {
         is EntityWidget -> scope.launch { ha.snapshot(widget.config.entity).collect(widget::show) }
         is CalendarWidget -> scope.launch { combine(calendars.snapshot, now, ::Pair).collect { (s, m) -> widget.show(s, m) } }

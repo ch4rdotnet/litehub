@@ -66,7 +66,7 @@ class DashboardLoader(private val app: LitehubApp) {
     }
 
     // calendars without their own colour take the theme palette in order
-    private fun legend(theme: Theme): Legend {
+    fun legend(theme: Theme): Legend {
         val sources = app.sources.getOrNull()
         val calendars = sources?.calendars.orEmpty()
         val feeds = sources?.feeds.orEmpty()

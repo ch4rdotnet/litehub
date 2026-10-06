@@ -62,6 +62,9 @@ class MainActivity : Activity() {
     private var binder: DashboardBinder? = null
     private var pager: PagerView? = null
     private val ticker by lazy { Ticker(this) }
+
+    // the clock widgets run on, tile previews borrow it
+    val now get() = ticker.now
     private lateinit var root: FrameLayout
     private lateinit var admin: AdminFlow
     private lateinit var editor: EditorFlow

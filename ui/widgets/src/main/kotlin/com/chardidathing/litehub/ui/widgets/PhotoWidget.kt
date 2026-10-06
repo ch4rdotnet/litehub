@@ -31,6 +31,14 @@ class PhotoWidget(context: Context, theme: ResolvedTheme, val config: PhotoConfi
         photos.show(photo)
     }
 
+    // a plain note where photos would be, not a failure (a preview that doesn't load any)
+    fun note(text: String) {
+        message = text
+        failed = false
+        onContentChanged()
+        invalidate()
+    }
+
     // a failure shows over the last photo only when there isn't one yet
     fun fail(reason: String) {
         message = reason
