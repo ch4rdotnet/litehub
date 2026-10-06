@@ -39,7 +39,10 @@ abstract class ListWidget(context: Context, theme: ResolvedTheme, private val ti
 
     companion object {
         // a failed source says so, one that's never answered says it's still loading
-        fun notes(sources: List<String>, status: Map<String, SourceStatus>, legend: Legend): List<Row> = sources.mapNotNull { id ->
+        fun notes(sources: List<String>, status: Map<String, SourceStatus>, legend: Legend): List<Row> =
+            listOfNotNull(legend.problem?.let { Row(Kind.NOTE, it, error = true) }) + sourceNotes(sources, status, legend)
+
+        private fun sourceNotes(sources: List<String>, status: Map<String, SourceStatus>, legend: Legend) = sources.mapNotNull { id ->
             val name = legend.names[id] ?: id
             val s = status[id]
             when {
@@ -51,6 +54,6 @@ abstract class ListWidget(context: Context, theme: ResolvedTheme, private val ti
 
         // only claim there's nothing when every source actually answered
         fun allAnswered(sources: List<String>, status: Map<String, SourceStatus>) =
-            sources.all { status[it]?.let { s -> s.error == null && s.lastGood != null } == true }
+            sources.isNotEmpty() && sources.all { status[it]?.let { s -> s.error == null && s.lastGood != null } == true }
     }
 }

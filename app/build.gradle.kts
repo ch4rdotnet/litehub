@@ -33,6 +33,8 @@ android {
 dependencies {
     implementation(project(":core:config"))
     implementation(project(":source:ha"))
+    implementation(project(":source:calendar"))
+    implementation(project(":source:feed"))
     implementation(project(":ui:widgets"))
     implementation(libs.kotlinx.coroutines.android)
 }

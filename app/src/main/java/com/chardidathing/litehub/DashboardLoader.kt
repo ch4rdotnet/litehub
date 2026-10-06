@@ -5,9 +5,11 @@ import com.chardidathing.litehub.core.config.ConfigCodec
 import com.chardidathing.litehub.core.config.ConfigException
 import com.chardidathing.litehub.core.config.Themes
 import com.chardidathing.litehub.core.model.Page
+import com.chardidathing.litehub.core.model.Theme
 import com.chardidathing.litehub.ui.components.Icons
 import com.chardidathing.litehub.ui.tokens.Presets
 import com.chardidathing.litehub.ui.tokens.ResolvedTheme
+import com.chardidathing.litehub.ui.widgets.Legend
 import com.chardidathing.litehub.ui.widgets.WidgetCatalog
 import java.io.File
 import java.io.IOException
@@ -15,7 +17,7 @@ import java.io.IOException
 sealed interface Screen {
     val theme: ResolvedTheme
 
-    class Ready(override val theme: ResolvedTheme, val pages: List<Page>, val icons: Icons) : Screen
+    class Ready(override val theme: ResolvedTheme, val pages: List<Page>, val icons: Icons, val legend: Legend) : Screen
 
     class Failed(override val theme: ResolvedTheme, val reason: String) : Screen
 }
@@ -33,7 +35,9 @@ class DashboardLoader(private val app: LitehubApp) {
         // every page, so a swipe lands on cached state rather than "connecting"
         val entityIds = dashboard.pages.flatMap { it.widgets }.mapNotNull(WidgetCatalog::entityId)
         if (entityIds.isNotEmpty()) app.ha.preload(entityIds)
-        Screen.Ready(ResolvedTheme(theme, metrics, app.fonts, DeviceTier.isLow(app)), dashboard.pages, app.icons)
+        app.calendars.preload()
+        app.feeds.preload()
+        Screen.Ready(ResolvedTheme(theme, metrics, app.fonts, DeviceTier.isLow(app)), dashboard.pages, app.icons, legend(theme))
     } catch (e: ConfigException) {
         failed(e.message.orEmpty(), systemDark, metrics)
     } catch (e: IOException) {
@@ -51,6 +55,20 @@ class DashboardLoader(private val app: LitehubApp) {
             partial.renameTo(File(app.filesDir, name))
             dropped.delete()
         }
+    }
+
+    // calendars without their own colour take the theme palette in order
+    private fun legend(theme: Theme): Legend {
+        val sources = app.sources.getOrNull()
+        val calendars = sources?.calendars.orEmpty()
+        val feeds = sources?.feeds.orEmpty()
+        return Legend(
+            names = calendars.associate { it.id to it.name } + feeds.associate { it.id to it.name },
+            colors = calendars.mapIndexed { i, c -> c.id to (c.color ?: theme.palette[i % theme.palette.size]) }.toMap(),
+            calendars = calendars.map { it.id },
+            feeds = feeds.map { it.id },
+            problem = app.sources.exceptionOrNull()?.message,
+        )
     }
 
     private fun failed(reason: String, systemDark: Boolean, metrics: DisplayMetrics): Screen {

@@ -41,5 +41,12 @@ data class Moment(val nowMs: Long, val zone: ZoneId, val hour24: Boolean, val lo
     }
 }
 
-// display names and colours for every calendar and feed source, fixed for a dashboard
-data class Legend(val names: Map<String, String>, val colors: Map<String, Int>, val calendars: List<String>, val feeds: List<String>)
+// display names and colours for every calendar and feed source, fixed for a dashboard.
+// problem is set when sources.json itself couldn't be used
+data class Legend(
+    val names: Map<String, String>,
+    val colors: Map<String, Int>,
+    val calendars: List<String>,
+    val feeds: List<String>,
+    val problem: String? = null,
+)

@@ -8,7 +8,7 @@ import android.view.ViewTreeObserver
 import com.chardidathing.litehub.ui.components.MessageView
 import com.chardidathing.litehub.ui.components.PageView
 import com.chardidathing.litehub.ui.components.PagerView
-import com.chardidathing.litehub.ui.widgets.EntityWidget
+import com.chardidathing.litehub.ui.components.WidgetView
 import com.chardidathing.litehub.ui.widgets.WidgetCatalog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -26,8 +26,11 @@ class MainActivity : Activity() {
     private var loading: Job? = null
     private var binder: DashboardBinder? = null
     private var pager: PagerView? = null
+    private val ticker by lazy { Ticker(this) }
     private var started = false
     private var reportedDrawn = false
+    // nothing touches the network until the cached dashboard is on screen
+    private var firstFrameDone = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -37,12 +40,17 @@ class MainActivity : Activity() {
     override fun onStart() {
         super.onStart()
         started = true
+        ticker.start()
+        if (firstFrameDone) startSources()
         pager?.let { binder?.show(it.firstVisible, it.lastVisible) }
     }
 
     override fun onStop() {
         started = false
         binder?.stop()
+        ticker.stop()
+        app.calendars.stop()
+        app.feeds.stop()
         super.onStop()
     }
 
@@ -54,6 +62,11 @@ class MainActivity : Activity() {
     override fun onDestroy() {
         scope.cancel()
         super.onDestroy()
+    }
+
+    private fun startSources() {
+        app.calendars.start()
+        app.feeds.start()
     }
 
     private fun load() {
@@ -76,19 +89,16 @@ class MainActivity : Activity() {
         window.setBackgroundDrawable(ColorDrawable(theme.colors.background))
         val view = when (screen) {
             is Screen.Ready -> {
-                val entityWidgets = ArrayList<List<EntityWidget>>()
+                val widgets = ArrayList<List<WidgetView>>()
                 val pages = screen.pages.map { page ->
                     val view = PageView(this, page.columns, page.rows, theme.spacing.m)
-                    val bound = ArrayList<EntityWidget>()
-                    for (p in page.widgets) {
-                        val widget = WidgetCatalog.create(this, theme, screen.icons, p)
-                        if (widget is EntityWidget) bound += widget
-                        view.addWidget(widget, p.x, p.y, p.w, p.h)
+                    val made = page.widgets.map { p ->
+                        WidgetCatalog.create(this, theme, screen.icons, screen.legend, p).also { view.addWidget(it, p.x, p.y, p.w, p.h) }
                     }
-                    entityWidgets += bound
+                    widgets += made
                     view
                 }
-                val b = DashboardBinder(app.ha, entityWidgets, scope)
+                val b = DashboardBinder(app.ha, app.calendars, app.feeds, ticker.now, widgets, scope)
                 binder = b
                 PagerView(this, theme, pages).also {
                     pager = it
@@ -106,8 +116,9 @@ class MainActivity : Activity() {
                     view.viewTreeObserver.removeOnPreDrawListener(this)
                     view.post {
                         reportFullyDrawn()
-                        // network waits until the cached dashboard is on screen
+                        firstFrameDone = true
                         app.ha.connect()
+                        if (started) startSources()
                     }
                     return true
                 }
