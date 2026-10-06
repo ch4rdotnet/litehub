@@ -18,6 +18,9 @@ class TextBlock(private val maxLines: Int = Int.MAX_VALUE) {
 
     val height: Int get() = layout?.height ?: 0
 
+    // width of the first line as drawn, for placing things after a single line value
+    val lineWidth: Float get() = layout?.takeIf { it.lineCount > 0 }?.getLineWidth(0) ?: 0f
+
     fun set(text: CharSequence, style: ResolvedTheme.Text, color: Int, width: Int, align: Layout.Alignment = Layout.Alignment.ALIGN_NORMAL) {
         val changed = text != this.text || width != this.width || align != this.align ||
             style.size != paint.textSize || style.typeface != paint.typeface || color != paint.color
