@@ -29,6 +29,7 @@ class HaClientTest {
     private val statuses = LinkedBlockingQueue<HaClient.Status>()
     private val events = LinkedBlockingQueue<HaClient.EntityEvent>()
     private val entities = HashMap<String, Entity>()
+    private val pushes = LinkedBlockingQueue<kotlinx.serialization.json.JsonObject>()
 
     private val listener = object : HaClient.Listener {
         override fun onStatus(status: HaClient.Status) {
@@ -38,6 +39,10 @@ class HaClientTest {
         override fun onEntities(event: HaClient.EntityEvent) {
             EntityDiff.apply(entities, event.body)
             events += event
+        }
+
+        override fun onPush(message: kotlinx.serialization.json.JsonObject) {
+            pushes += message
         }
     }
 
@@ -146,6 +151,24 @@ class HaClientTest {
         val sent = generateSequence { ha.received.poll(5, TimeUnit.SECONDS) }.first { it.type() == "call_service" }
         assertEquals("true", sent["return_response"].toString())
         assertEquals("1", (sent["service_data"] as kotlinx.serialization.json.JsonObject)["duration"]?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `push channel delivers notifications and survives a restart`() {
+        ha.accept()
+        ha.accept()
+        val client = client()
+        runBlocking(confined) { client.setPushChannel("hook") }
+        client.start()
+        awaitStatus<HaClient.Status.Connected>()
+        generateSequence { ha.received.poll(5, TimeUnit.SECONDS) }.first { it.type() == "mobile_app/push_notification_channel" }
+        ha.push("command_screen_off")
+        assertEquals("command_screen_off", pushes.poll(5, TimeUnit.SECONDS)!!["message"]!!.jsonPrimitive.content)
+        ha.restart()
+        awaitStatus<HaClient.Status.Connected>()
+        generateSequence { ha.received.poll(5, TimeUnit.SECONDS) }.first { it.type() == "mobile_app/push_notification_channel" }
+        ha.push("hello")
+        assertEquals("hello", pushes.poll(5, TimeUnit.SECONDS)!!["message"]!!.jsonPrimitive.content)
     }
 
     private inline fun <reified T : HaClient.Status> awaitStatus(): T {

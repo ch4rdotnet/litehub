@@ -35,6 +35,13 @@ class FakeHa(private val token: String) : AutoCloseable {
 
     @Volatile private var subscription: Int? = null
 
+    @Volatile private var pushSubscription: Int? = null
+
+    fun push(message: String) {
+        val sub = pushSubscription ?: return
+        socket?.send(event(sub, """{"message":"$message","title":"hub"}"""))
+    }
+
     val url: String get() = server.url("/").toString()
 
     fun accept() = server.enqueue(MockResponse.Builder().webSocketUpgrade(listener).build())
@@ -82,6 +89,10 @@ class FakeHa(private val token: String) : AutoCloseable {
                     webSocket.send(event(id, """{"a":{$added}}"""))
                 }
                 "unsubscribe_events" -> webSocket.send(result(id!!, success = true))
+                "mobile_app/push_notification_channel" -> {
+                    webSocket.send(result(id!!, success = true))
+                    pushSubscription = id
+                }
                 "call_service" -> {
                     val response = serviceResponse.takeIf { msg["return_response"]?.jsonPrimitive?.content == "true" }
                     if (response != null && !failServices) {

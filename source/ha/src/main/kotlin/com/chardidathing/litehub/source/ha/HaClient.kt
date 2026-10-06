@@ -60,6 +60,9 @@ class HaClient(
         fun onStatus(status: Status)
 
         fun onEntities(event: EntityEvent)
+
+        // a notify.mobile_app_* message for this device, see setPushChannel
+        fun onPush(message: JsonObject) = Unit
     }
 
     private class AuthRejected(message: String) : IOException(message)
@@ -73,6 +76,8 @@ class HaClient(
     private var wanted: Set<String> = emptySet()
     private var socket: WebSocket? = null
     private var subscription: Subscription? = null
+    private var pushWebhook: String? = null
+    private var pushSubscription: Int? = null
     private var nextId = 1
     private val pending = HashMap<Int, CompletableDeferred<JsonObject>>()
 
@@ -191,8 +196,10 @@ class HaClient(
             nextId = 1
             subscription = null
             onConnected()
+            pushSubscription = null
             listener.onStatus(Status.Connected)
             resubscribe()
+            subscribePush()
             for (text in incoming) handle(parse(text))
         } finally {
             ws.cancel()
@@ -203,10 +210,43 @@ class HaClient(
         }
     }
 
+    // local push for a registered companion device, notify.mobile_app_* lands here without
+    // firebase. null stops it. kept across reconnects like the entity subscription
+    fun setPushChannel(webhookId: String?) {
+        if (webhookId == pushWebhook) return
+        pushWebhook = webhookId
+        if (socket != null) subscribePush()
+    }
+
+    private fun subscribePush() {
+        val ws = socket ?: return
+        pushSubscription?.let { old ->
+            ws.send(buildJsonObject {
+                put("id", nextId++)
+                put("type", "unsubscribe_events")
+                put("subscription", old)
+            }.toString())
+        }
+        pushSubscription = null
+        val webhook = pushWebhook ?: return
+        val id = nextId++
+        pushSubscription = id
+        ws.send(buildJsonObject {
+            put("id", id)
+            put("type", "mobile_app/push_notification_channel")
+            put("webhook_id", webhook)
+            put("support_confirm", false)
+        }.toString())
+    }
+
     private fun handle(message: JsonObject) {
         val id = (message["id"] as? JsonPrimitive)?.intOrNull ?: return
         when (message.type) {
             "event" -> {
+                if (id == pushSubscription) {
+                    (message["event"] as? JsonObject)?.let(listener::onPush)
+                    return
+                }
                 val sub = subscription?.takeIf { it.id == id } ?: return
                 val body = message["event"] as? JsonObject ?: return
                 listener.onEntities(EntityEvent(sub.requested, sub.initial, body))
