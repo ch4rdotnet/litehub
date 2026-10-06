@@ -5,8 +5,9 @@ import android.view.View
 import android.view.ViewGroup
 import kotlin.math.roundToInt
 
-// a page grid, children are placed by cell. no background, the window draws it
-class PageView(context: Context, private val columns: Int, private val rows: Int, private val gutter: Float) :
+// a page grid, children are placed by cell. no background, the window draws it. edge is the
+// margin around the outside (the pager's dots sit in the bottom one), gap is between tiles
+class PageView(context: Context, private val columns: Int, private val rows: Int, private val edge: Float, private val gap: Float) :
     ViewGroup(context) {
 
     private class Cell(val x: Int, val y: Int, val w: Int, val h: Int) : LayoutParams(MATCH_PARENT, MATCH_PARENT)
@@ -32,8 +33,8 @@ class PageView(context: Context, private val columns: Int, private val rows: Int
         for (i in 0 until childCount) {
             val child = getChildAt(i)
             val c = child.layoutParams as Cell
-            val left = (gutter + c.x * (cw + gutter)).roundToInt()
-            val top = (gutter + c.y * (ch + gutter)).roundToInt()
+            val left = (edge + c.x * (cw + gap)).roundToInt()
+            val top = (edge + c.y * (ch + gap)).roundToInt()
             child.layout(left, top, left + child.measuredWidth, top + child.measuredHeight)
         }
     }
@@ -42,10 +43,9 @@ class PageView(context: Context, private val columns: Int, private val rows: Int
 
     override fun shouldDelayChildPressedState() = false
 
-    // gutters sit between cells and around the outside edge
-    private fun cell(total: Int, count: Int) = (total - gutter * (count + 1)) / count
+    private fun cell(total: Int, count: Int) = (total - edge * 2 - gap * (count - 1)) / count
 
-    private fun span(cell: Float, cells: Int) = cell * cells + gutter * (cells - 1)
+    private fun span(cell: Float, cells: Int) = cell * cells + gap * (cells - 1)
 
     private fun exactly(size: Float) =
         MeasureSpec.makeMeasureSpec(size.roundToInt().coerceAtLeast(0), MeasureSpec.EXACTLY)

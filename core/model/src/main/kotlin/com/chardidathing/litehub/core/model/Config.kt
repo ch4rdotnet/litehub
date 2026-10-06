@@ -1,5 +1,6 @@
 package com.chardidathing.litehub.core.model
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 
@@ -20,13 +21,21 @@ data class Dashboard(
     val pages: List<Page>,
 )
 
+// compact pages draw with the theme one step smaller (spacing and type), for finer grids
 @Serializable
 data class Page(
     val id: String,
     val columns: Int,
     val rows: Int,
     val widgets: List<Placement>,
+    val density: Density = Density.COMFORTABLE,
 )
+
+@Serializable
+enum class Density {
+    @SerialName("comfortable") COMFORTABLE,
+    @SerialName("compact") COMPACT,
+}
 
 // x, y, w, h are in grid cells, config is whatever the widget type's schema says
 @Serializable

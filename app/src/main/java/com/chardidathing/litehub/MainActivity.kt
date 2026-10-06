@@ -9,6 +9,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import com.chardidathing.litehub.core.config.ConfigCodec
+import com.chardidathing.litehub.core.model.Density
 import com.chardidathing.litehub.ui.components.NoticeStack
 import com.chardidathing.litehub.ui.components.NowPlayingView
 import com.chardidathing.litehub.ui.components.VideoFrame
@@ -490,9 +491,10 @@ class MainActivity : Activity() {
             is Screen.Ready -> {
                 val widgets = ArrayList<List<WidgetView>>()
                 val pages = screen.pages.map { page ->
-                    val view = PageView(this, page.columns, page.rows, theme.spacing.m)
+                    val pageTheme = if (page.density == Density.COMPACT) theme.compact else theme
+                    val view = PageView(this, page.columns, page.rows, theme.spacing.m, pageTheme.spacing.m)
                     val made = page.widgets.map { p ->
-                        WidgetCatalog.create(this, theme, screen.icons, screen.legend, p).also { view.addWidget(it, p.x, p.y, p.w, p.h) }
+                        WidgetCatalog.create(this, pageTheme, screen.icons, screen.legend, p).also { view.addWidget(it, p.x, p.y, p.w, p.h) }
                     }
                     widgets += made
                     view

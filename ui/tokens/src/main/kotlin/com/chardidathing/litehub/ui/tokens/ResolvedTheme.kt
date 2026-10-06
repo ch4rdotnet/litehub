@@ -7,8 +7,19 @@ import com.chardidathing.litehub.core.model.Colors
 import com.chardidathing.litehub.core.model.TextStyle
 import com.chardidathing.litehub.core.model.Theme
 
-// a theme turned into px and typefaces for drawing, build it off the main thread
-class ResolvedTheme(theme: Theme, metrics: DisplayMetrics, fonts: Fonts, lowTier: Boolean) {
+// a theme turned into px and typefaces for drawing, build it off the main thread. compact moves
+// spacing and type one step down the theme's own scale (m becomes s, body1 becomes body2), touch
+// targets stay the same size, fingers don't shrink
+class ResolvedTheme(
+    private val theme: Theme,
+    private val metrics: DisplayMetrics,
+    private val fonts: Fonts,
+    private val lowTier: Boolean,
+    compact: Boolean = false,
+) {
+
+    // the same theme for compact pages, typefaces are cached by Fonts so this is cheap
+    val compact: ResolvedTheme by lazy { if (compact) this else ResolvedTheme(theme, metrics, fonts, lowTier, compact = true) }
 
     val colors: Colors = theme.colors
 
@@ -16,13 +27,10 @@ class ResolvedTheme(theme: Theme, metrics: DisplayMetrics, fonts: Fonts, lowTier
 
     val screenOff: Int = Presets.SCREEN_OFF
 
-    val spacing = Spacing(
-        xs = dp(theme.spacing.xs, metrics),
-        s = dp(theme.spacing.s, metrics),
-        m = dp(theme.spacing.m, metrics),
-        l = dp(theme.spacing.l, metrics),
-        xl = dp(theme.spacing.xl, metrics),
-    )
+    val spacing = with(theme.spacing) {
+        if (compact) Spacing(xs = dp(xs, metrics), s = dp(xs, metrics), m = dp(s, metrics), l = dp(m, metrics), xl = dp(l, metrics))
+        else Spacing(xs = dp(xs, metrics), s = dp(s, metrics), m = dp(m, metrics), l = dp(l, metrics), xl = dp(xl, metrics))
+    }
 
     val radii = Radii(
         small = dp(theme.radii.small, metrics),
@@ -30,7 +38,8 @@ class ResolvedTheme(theme: Theme, metrics: DisplayMetrics, fonts: Fonts, lowTier
         large = dp(theme.radii.large, metrics),
     )
 
-    val iconSize = dp(theme.iconSize, metrics)
+    // compact icons shrink by the same step as the text beside them
+    val iconSize = dp(theme.iconSize, metrics) * if (compact) theme.type.body2.size / theme.type.body1.size else 1f
 
     val touchTarget = dp(theme.touchTarget, metrics)
 
@@ -46,7 +55,13 @@ class ResolvedTheme(theme: Theme, metrics: DisplayMetrics, fonts: Fonts, lowTier
             size = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, style.size, metrics),
             typeface = fonts.typeface(theme.font, style.weight),
         )
-        TypeScale(
+        if (compact) TypeScale(
+            h1 = r(h2), h2 = r(h3), h3 = r(h4), h4 = r(h5), h5 = r(h6), h6 = r(subtitle1),
+            subtitle1 = r(subtitle2), subtitle2 = r(body2),
+            body1 = r(body2), body2 = r(caption),
+            button = r(button), caption = r(caption), overline = r(overline),
+        )
+        else TypeScale(
             h1 = r(h1), h2 = r(h2), h3 = r(h3), h4 = r(h4), h5 = r(h5), h6 = r(h6),
             subtitle1 = r(subtitle1), subtitle2 = r(subtitle2),
             body1 = r(body1), body2 = r(body2),
