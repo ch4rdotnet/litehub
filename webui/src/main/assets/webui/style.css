@@ -4,6 +4,7 @@
   --editor-split: 2fr 1fr;
   --editor-field: 40em;
   --editor-text-height: 70vh;
+  --editor-short-height: 30vh;
   --editor-line: 1px;
   --control: calc(var(--touch) / 2);
 }
@@ -25,6 +26,7 @@ button.on, button.primary { background: var(--primary); color: var(--on-primary)
 button:disabled { visibility: hidden; }
 input, select { min-height: var(--control); }
 textarea { width: 100%; height: var(--editor-text-height); font-family: monospace; font-size: var(--body2); }
+textarea.short { height: var(--editor-short-height); }
 .bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-s); margin: var(--space-s) 0; }
 .grow { flex: 1; }
 .split { display: grid; grid-template-columns: var(--editor-split); gap: var(--space-l); }

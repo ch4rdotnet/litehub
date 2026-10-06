@@ -75,6 +75,15 @@ class AdminFlow(
             add("reload" to onReload)
             if (companion.registration == null) add("add to home assistant" to ::register)
             else add("unregister" to ::forget)
+            val saver = app.settings.screensaver
+            add((if (saver.enabled) "screensaver: on" else "screensaver: off") to {
+                scope.launch {
+                    withContext(Dispatchers.IO) { app.saveSettings(app.settings.copy(screensaver = saver.copy(enabled = !saver.enabled))) }
+                    app.screensaver.reload()
+                    menu()
+                }
+            })
+            add((if (ScreenAdmin.active(app)) "real screen off: on" else "real screen off: off") to ::screenAdmin)
             add((if (app.settings.chime) "chime: on" else "chime: off") to {
                 scope.launch {
                     withContext(Dispatchers.IO) { app.saveSettings(app.settings.copy(chime = !app.settings.chime)) }
@@ -152,6 +161,31 @@ class AdminFlow(
             }
             menu()
         }
+    }
+
+    // device admin, with both ways to grant it spelled out
+    private fun screenAdmin() {
+        val t = theme ?: return
+        val dpm = activity.getSystemService(android.app.admin.DevicePolicyManager::class.java)
+        if (ScreenAdmin.active(app)) {
+            dpm.removeActiveAdmin(ScreenAdmin.component(app))
+            menu()
+            return
+        }
+        val detail = "with it, a blank screen really turns the panel off and ha can still turn it back on. " +
+            "android asks to let litehub lock the screen, nothing else. if that never shows on this firmware, run this from a computer: ${ScreenAdmin.ADB}"
+        show(MenuView(activity, t, "real screen off", detail, listOf("ask android", "back")) { i ->
+            if (i == 0) {
+                close()
+                activity.startActivity(
+                    Intent(android.app.admin.DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
+                        .putExtra(android.app.admin.DevicePolicyManager.EXTRA_DEVICE_ADMIN, ScreenAdmin.component(app))
+                        .putExtra(android.app.admin.DevicePolicyManager.EXTRA_ADD_EXPLANATION, "lets litehub turn the screen off at night and wake it again"),
+                )
+            } else {
+                menu()
+            }
+        })
     }
 
     private fun removePin() {

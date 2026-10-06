@@ -85,7 +85,7 @@ class HaClient(
 
     // other long lived subscriptions (todo lists), by key. fields build the subscribe message,
     // each event body goes to its handler. all of them come back after a reconnect
-    private class Extra(val type: String, val fields: JsonObject, val onEvent: (JsonObject) -> Unit) {
+    private class Extra(val type: String, val fields: JsonObject, val onEvent: (JsonObject) -> Unit, val onError: (String) -> Unit) {
         var id: Int? = null
     }
     private val extras = HashMap<String, Extra>()
@@ -233,9 +233,10 @@ class HaClient(
         if (socket != null) subscribePush()
     }
 
-    fun subscribe(key: String, type: String, fields: JsonObject, onEvent: (JsonObject) -> Unit) {
+    // onError is ha turning the subscription down (a list that isn't a todo entity and the like)
+    fun subscribe(key: String, type: String, fields: JsonObject, onError: (String) -> Unit = {}, onEvent: (JsonObject) -> Unit) {
         unsubscribe(key)
-        val extra = Extra(type, fields, onEvent)
+        val extra = Extra(type, fields, onEvent, onError)
         extras[key] = extra
         if (socket != null) send(extra)
     }
@@ -298,6 +299,13 @@ class HaClient(
             // a ping's answer has no success field, count arriving as success
             "pong" -> pending.remove(id)?.complete(buildJsonObject { put("success", true) })
             "result" -> {
+                extras.values.firstOrNull { it.id == id }?.let { extra ->
+                    if ((message["success"] as? JsonPrimitive)?.booleanOrNull == false) {
+                        val reason = (message["error"] as? JsonObject)?.string("message")?.replaceFirstChar { it.lowercase() }
+                        extra.onError(reason ?: "home assistant refused")
+                    }
+                    return
+                }
                 if (id == pushSubscription && (message["success"] as? JsonPrimitive)?.booleanOrNull == false) {
                     pushSubscription = null
                     listener.onPushRejected()

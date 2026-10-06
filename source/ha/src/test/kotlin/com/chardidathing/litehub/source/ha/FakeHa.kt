@@ -90,6 +90,10 @@ class FakeHa(private val token: String) : AutoCloseable {
                 }
                 "unsubscribe_events" -> webSocket.send(result(id!!, success = true))
                 "todo/item/subscribe" -> {
+                    if (msg["entity_id"]?.jsonPrimitive?.contentOrNull?.startsWith("todo.") != true) {
+                        webSocket.send("""{"id":$id,"type":"result","success":false,"error":{"code":"not_found","message":"Entity not found"}}""")
+                        return
+                    }
                     webSocket.send(result(id!!, success = true))
                     webSocket.send(event(id, """{"items":[{"uid":"1","summary":"milk","status":"needs_action"}]}"""))
                 }

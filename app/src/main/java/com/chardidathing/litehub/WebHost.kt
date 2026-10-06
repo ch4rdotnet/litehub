@@ -9,6 +9,7 @@ import android.os.Process
 import android.os.SystemClock
 import com.chardidathing.litehub.core.config.ConfigCodec
 import com.chardidathing.litehub.core.config.ConfigException
+import com.chardidathing.litehub.core.config.SettingsCodec
 import com.chardidathing.litehub.core.config.SourcesCodec
 import com.chardidathing.litehub.core.model.Theme
 import com.chardidathing.litehub.core.model.WidgetSchema
@@ -127,6 +128,15 @@ class WebHost(private val app: LitehubApp) : HubAccess {
         File(app.filesDir, LitehubApp.HA_FILE).writeAtomic(Json.encodeToString(HaCredentials.serializer(), next))
         AppLog.add("home assistant connection changed from the web editor")
         onActivity { it.reload() }
+    }
+
+    override fun screensaver(): String = SettingsCodec.encodeScreensaver(app.settings.screensaver)
+
+    override fun saveScreensaver(text: String): Result<Unit> = validated {
+        val next = SettingsCodec.decodeScreensaver(text)
+        app.saveSettings(app.settings.copy(screensaver = next))
+        AppLog.add("screensaver settings saved from the web editor")
+        main.post { app.screensaver.reload() }
     }
 
     override fun schemas(): String = Json.encodeToString(ListSerializer(WidgetSchema.serializer()), WidgetSchemas.all)

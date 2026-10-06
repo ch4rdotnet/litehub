@@ -1,7 +1,7 @@
 // the browser editor. edits a copy of config.json and saves it back whole, the hub checks it
 // before it's written, so a broken edit never reaches the screen
 const $ = (id) => document.getElementById(id);
-let config = null, schemas = [], sources = { calendars: [], feeds: [] }, dash = 0, page = 0, picked = -1;
+let config = null, schemas = [], sources = { calendars: [], feeds: [] }, entities = [], dash = 0, page = 0, picked = -1;
 
 async function api(path, options = {}) {
   const r = await fetch(path, options);
@@ -36,9 +36,7 @@ async function start() {
   dash = Math.max(0, config.dashboards.findIndex((d) => d.id === config.activeDashboard));
   $("add-type").innerHTML = schemas.map((s) => `<option value="${s.type}">${s.name}</option>`).join("");
   loadConnections();
-  api("/api/entities").then((t) => {
-    $("entities").innerHTML = JSON.parse(t).map((e) => `<option value="${e.id}">${e.name}${e.area ? " · " + e.area : ""}</option>`).join("");
-  }).catch(() => {});
+  api("/api/entities").then((t) => { entities = JSON.parse(t); drawSettings(); }).catch(() => {});
   render();
   refreshPreview();
   setInterval(refreshPreview, 30000);
@@ -149,8 +147,13 @@ function field(f, values) {
       `<label><input type="checkbox" name="${f.key}" value="${s.id}" ${chosen.includes(s.id) ? "checked" : ""}>${s.name}</label>`).join("") + `</div>`;
   }
   const type = f.kind === "number" ? "number" : "text";
-  const list = f.kind === "entity" ? `list="entities"` : "";
-  return `<label>${f.label}${f.required ? " (needed)" : ""}<input name="${f.key}" type="${type}" ${list} value="${String(v).replace(/"/g, "&quot;")}"></label>`;
+  const value = String(v).replace(/"/g, "&quot;");
+  const label = f.label + (f.required ? " (needed)" : "");
+  if (f.kind !== "entity") return `<label>${label}<input name="${f.key}" type="${type}" value="${value}"></label>`;
+  // suggestions only from the domains the field can use, the same filter as the hub's own picker
+  const fit = entities.filter((e) => !f.domains || !f.domains.length || f.domains.includes(e.id.split(".")[0]));
+  const options = fit.map((e) => `<option value="${e.id}">${e.name}${e.area ? " · " + e.area : ""}</option>`).join("");
+  return `<label>${label}<input name="${f.key}" list="entities-${f.key}" value="${value}"><datalist id="entities-${f.key}">${options}</datalist></label>`;
 }
 
 function freeSpot(p, w, h) {
@@ -232,6 +235,7 @@ async function loadConnections() {
     const ha = JSON.parse(await api("/api/ha"));
     $("ha-url").value = ha.url || "";
     $("ha-token").placeholder = ha.tokenSet ? "set, leave empty to keep it" : "not set";
+    $("screensaver").value = await api("/api/screensaver");
     const text = await api("/api/sources");
     $("sources").value = text;
     sources = JSON.parse(text);
@@ -246,6 +250,12 @@ $("ha-form").onsubmit = async (e) => {
     say("ha-message", "saved, the hub reconnects with it", false);
     loadConnections();
   } catch (e) { say("ha-message", e.message, true); }
+};
+$("screensaver-save").onclick = async () => {
+  try {
+    await api("/api/screensaver", { method: "PUT", body: $("screensaver").value });
+    say("screensaver-message", "saved, the hub uses it straight away", false);
+  } catch (e) { say("screensaver-message", e.message, true); }
 };
 $("sources-save").onclick = async () => {
   try {

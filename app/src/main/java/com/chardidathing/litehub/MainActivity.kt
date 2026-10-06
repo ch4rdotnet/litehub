@@ -10,6 +10,8 @@ import android.view.View
 import android.view.WindowManager
 import com.chardidathing.litehub.core.config.ConfigCodec
 import com.chardidathing.litehub.ui.components.NoticeView
+import com.chardidathing.litehub.ui.components.ScreensaverView
+import kotlinx.coroutines.delay
 import com.chardidathing.litehub.ui.editor.TextPrompt
 import android.view.inputmethod.InputMethodManager
 import java.io.File
@@ -33,6 +35,9 @@ import kotlinx.coroutines.withContext
 class MainActivity : Activity() {
 
     private companion object {
+        const val PERMISSIONS = 1
+        const val PERCENT = 100f
+        const val MS_PER_S = 1000L
         const val MAX_LEVEL = 255f
         // a notification banner stays this long unless it's tapped away
         const val NOTICE_MS = 15_000L
@@ -71,6 +76,14 @@ class MainActivity : Activity() {
         companion = CompanionBridge(app, scope, Commands())
         admin = AdminFlow(this, app, root, scope, onReload = ::reload, onEdit = ::edit, onRestore = ::restorePrevious, companion = companion)
         app.web.attach(this)
+        // a panel turned off by device admin comes back on to this, over the keyguard
+        setShowWhenLocked(true)
+        setTurnScreenOn(true)
+        scope.launch {
+            app.screensaver.mode.collect { m ->
+                companion.update { it.copy(display = m.label, screenOn = m != ScreensaverController.Mode.BLANK) }
+            }
+        }
         scope.launch(Dispatchers.IO) { app.web.apply() }
         load()
     }
@@ -102,6 +115,9 @@ class MainActivity : Activity() {
         started = true
         ticker.start()
         if (firstFrameDone) companion.start()
+        app.screensaver.display = ScreenDisplay()
+        app.screensaver.start()
+        askPermissions()
         if (firstFrameDone) startSources()
         pager?.let { binder?.show(it.current) }
     }
@@ -111,6 +127,7 @@ class MainActivity : Activity() {
         binder?.stop()
         ticker.stop()
         companion.stop()
+        app.screensaver.display = null
         app.calendars.stop()
         app.feeds.stop()
         app.weather.stop()
@@ -126,10 +143,10 @@ class MainActivity : Activity() {
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
         if (ev.actionMasked == MotionEvent.ACTION_DOWN) {
             companion.interacted()
-            if (screenOff != null) {
-                setScreen(true)
-                return true
-            }
+            val sleeping = app.screensaver.mode.value != ScreensaverController.Mode.AWAKE
+            app.screensaver.interacted()
+            // the touch that wakes the screen doesn't also tap whatever was under it
+            if (sleeping) return true
         }
         return super.dispatchTouchEvent(ev)
     }
@@ -143,7 +160,9 @@ class MainActivity : Activity() {
 
     // what ha can ask of the screen through notify.mobile_app_litehub
     private inner class Commands : CompanionBridge.Commands {
-        override fun screen(on: Boolean) = setScreen(on)
+        override fun screen(on: Boolean) = if (on) app.screensaver.wake("home assistant") else app.screensaver.force(ScreensaverController.Mode.BLANK)
+
+        override fun screensaver(on: Boolean) = if (on) app.screensaver.force(ScreensaverController.Mode.SCREENSAVER) else app.screensaver.wake("home assistant")
 
         override fun brightness(level: Int) {
             // 0 would be the same as off, ha's companion app treats it as the dimmest
@@ -173,24 +192,77 @@ class MainActivity : Activity() {
         }
 
         override fun notify(title: String?, message: String, chime: Boolean) {
+            // an alert is worth seeing, it wakes a dimmed or blank screen
+            app.screensaver.wake("a notification")
             showNotice(title, message)
             if (chime && app.settings.chime) this@MainActivity.chime.play()
         }
     }
 
-    private fun setScreen(on: Boolean) {
-        val theme = this.theme ?: return
-        if (on) {
-            screenOff?.let(root::removeView)
-            screenOff = null
-            window.attributes = window.attributes.apply { screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE }
-        } else if (screenOff == null) {
-            // no device admin, so the panel stays powered. black and the lowest backlight is as off as it gets
-            screenOff = View(this).apply { setBackgroundColor(theme.screenOff) }.also(root::addView)
-            window.attributes = window.attributes.apply { screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_OFF }
+    // what the screensaver controller asks of the screen
+    private inner class ScreenDisplay : ScreensaverController.Display {
+        override fun showScreensaver() {
+            val theme = this@MainActivity.theme ?: return
+            if (saver != null) return
+            val view = ScreensaverView(this@MainActivity, theme)
+            saver = view
+            root.addView(view)
+            saverJobs += scope.launch { ticker.now.collect { view.showTime(it.time(it.nowMs), it.longDate()) } }
+            val settings = app.settings.screensaver
+            val photos = settings.photos
+            // the photo frame is one of the first things a low ram device does without
+            if (photos != null && !DeviceTier.isLow(app)) saverJobs += scope.launch {
+                val frame = PhotoFrame(photos, app.ha, app.http)
+                while (true) {
+                    val w = root.width
+                    val h = root.height
+                    frame.next(w, h).fold(view::showPhoto) {
+                        AppLog.add("photo frame stopped, ${it.message}")
+                        return@launch
+                    }
+                    delay(settings.photoSeconds * MS_PER_S)
+                }
+            }
         }
-        companion.update { it.copy(screenOn = on) }
-        app.hubState = app.hubState.copy(screenOn = on)
+
+        override fun hideScreensaver() {
+            saverJobs.forEach(Job::cancel)
+            saverJobs.clear()
+            saver?.let(root::removeView)
+            saver = null
+        }
+
+        override fun dim(percent: Int?) {
+            window.attributes = window.attributes.apply {
+                screenBrightness = percent?.let { it / PERCENT } ?: WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+            }
+        }
+
+        override fun overlayBlank(on: Boolean) {
+            val theme = this@MainActivity.theme ?: return
+            if (!on) {
+                screenOff?.let(root::removeView)
+                screenOff = null
+                window.attributes = window.attributes.apply { screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE }
+            } else if (screenOff == null) {
+                // no device admin, so the panel stays powered. black and the lowest backlight is as off as it gets
+                screenOff = View(this@MainActivity).apply { setBackgroundColor(theme.screenOff) }.also(root::addView)
+                window.attributes = window.attributes.apply { screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_OFF }
+            }
+        }
+    }
+
+    private var saver: ScreensaverView? = null
+    private val saverJobs = ArrayList<Job>()
+
+    // the screensaver's photo folder and camera need asking for once
+    private fun askPermissions() {
+        val s = app.settings.screensaver
+        val wanted = buildList {
+            if (s.photos?.folder != null) add(if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) android.Manifest.permission.READ_MEDIA_IMAGES else android.Manifest.permission.READ_EXTERNAL_STORAGE)
+            if (s.cameraWake) add(android.Manifest.permission.CAMERA)
+        }.filter { checkSelfPermission(it) != android.content.pm.PackageManager.PERMISSION_GRANTED }
+        if (wanted.isNotEmpty()) requestPermissions(wanted.toTypedArray(), PERMISSIONS)
     }
 
     private fun showNotice(title: String?, message: String) {

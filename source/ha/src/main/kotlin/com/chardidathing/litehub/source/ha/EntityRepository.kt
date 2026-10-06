@@ -111,8 +111,18 @@ class EntityRepository(
         scope.launch {
             val dropped = visible - ids
             visible = ids
-            client?.setEntityIds(ids)
+            client?.setEntityIds(visible + watched)
             dropped.forEach(::publish)
+        }
+    }
+
+    // entities followed whether or not they're on screen, the screensaver's wake sensors
+    private var watched: Set<String> = emptySet()
+
+    fun setWatched(ids: Set<String>) {
+        scope.launch {
+            watched = ids
+            client?.setEntityIds(visible + watched)
         }
     }
 
@@ -121,13 +131,18 @@ class EntityRepository(
     private val todos = HashMap<String, MutableStateFlow<TodoSnapshot>>()
     private val todoItems = HashMap<String, List<TodoItem>>()
     private val todoErrors = HashMap<String, String>()
+    // ha refused to follow the list at all
+    private val todoFailures = HashMap<String, String>()
 
     // a todo list's items, live. subscribing costs ha a little, release it when it's off screen
     fun todo(entity: String): StateFlow<TodoSnapshot> {
         val flow = synchronized(todos) { todos.getOrPut(entity) { MutableStateFlow(TodoSnapshot.Loading) } }
         scope.launch {
             publishTodo(entity)
-            client?.subscribe("todo:$entity", "todo/item/subscribe", buildJsonObject { put("entity_id", entity) }) { event ->
+            client?.subscribe("todo:$entity", "todo/item/subscribe", buildJsonObject { put("entity_id", entity) }, onError = { reason ->
+                todoFailures[entity] = reason
+                publishTodo(entity)
+            }) { event ->
                 val items = (event["items"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }.mapNotNull { i ->
                     val uid = i.str("uid") ?: return@mapNotNull null
                     TodoItem(uid, i.str("summary").orEmpty(), i.str("status") == "completed")
@@ -177,6 +192,7 @@ class EntityRepository(
         val items = todoItems[entity]
         val s = status
         flow.value = when {
+            todoFailures[entity] != null && items == null -> TodoSnapshot.Failed(todoFailures.getValue(entity))
             items != null -> TodoSnapshot.Ready(
                 items,
                 stale = (s as? HaClient.Status.Failed)?.reason ?: if (s is HaClient.Status.Connecting) CONNECTING else null,
@@ -318,7 +334,7 @@ class EntityRepository(
                 id in notFound -> EntitySnapshot.NotFound
                 entity != null && id in fresh -> EntitySnapshot.Live(entity, error)
                 // a neighbouring page, ha isn't sending it but nothing's wrong either
-                entity != null && id !in visible -> EntitySnapshot.Live(entity, error)
+                entity != null && id !in visible && id !in watched -> EntitySnapshot.Live(entity, error)
                 entity != null -> EntitySnapshot.Stale(entity, CONNECTING, error)
                 else -> EntitySnapshot.Connecting
             }

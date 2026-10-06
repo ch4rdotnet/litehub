@@ -76,13 +76,18 @@
       <button class="primary">save</button>
     </form>
     <p id="ha-message"></p>
+    <h2>screensaver and night</h2>
+    <p class="muted">idleMinutes, photos (one of folder, immich {url, apiKey, albumId} or haMedia), photoSeconds,
+      night {start, end, mode dim or blank, dimPercent}, wakeEntities, lightWake, cameraWake</p>
+    <textarea id="screensaver" class="short" spellcheck="false"></textarea>
+    <div class="bar"><button id="screensaver-save" class="primary">save</button></div>
+    <p id="screensaver-message"></p>
     <h2>calendars and feeds (sources.json)</h2>
     <textarea id="sources" spellcheck="false"></textarea>
     <div class="bar"><button id="sources-save" class="primary">save</button></div>
     <p id="sources-message"></p>
   </section>
 </main>
-<datalist id="entities"></datalist>
 <script src="/app.js"></script>
 </body>
 </html>

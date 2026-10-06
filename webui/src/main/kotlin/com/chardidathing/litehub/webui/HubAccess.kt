@@ -23,6 +23,11 @@ interface HubAccess {
     // a null token keeps the one already there
     fun saveHa(url: String, token: String?): Result<Unit>
 
+    // the screensaver block of settings.json, photo source, night window, wake sensors
+    fun screensaver(): String
+
+    fun saveScreensaver(text: String): Result<Unit>
+
     fun schemas(): String
 
     suspend fun entities(): Result<String>

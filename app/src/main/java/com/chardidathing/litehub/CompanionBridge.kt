@@ -26,6 +26,7 @@ class CompanionBridge(private val app: LitehubApp, private val scope: CoroutineS
 
     interface Commands {
         fun screen(on: Boolean)
+        fun screensaver(on: Boolean)
         // 0 to 255, like ha's companion app
         fun brightness(level: Int)
         fun dashboard(id: String)
@@ -44,6 +45,8 @@ class CompanionBridge(private val app: LitehubApp, private val scope: CoroutineS
         val page: Int = 1,
         val dashboard: String = "",
         val lastInteraction: Long = System.currentTimeMillis(),
+        // awake, screensaver, dimmed or blank
+        val display: String = "awake",
     )
 
     private var state = State()
@@ -62,6 +65,8 @@ class CompanionBridge(private val app: LitehubApp, private val scope: CoroutineS
     fun start() {
         val reg = registration ?: return
         app.ha.setPushChannel(reg.webhookId, rejected = { scope.launch { forget() } }, handler = ::onPush)
+        // registering again is harmless, it's how sensors added in an update reach ha
+        scope.launch { app.ha.mobileApp?.let { m -> sensors().forEach { s -> m.registerSensor(reg.webhookId, s) } } }
         heartbeat?.cancel()
         heartbeat = scope.launch {
             while (true) {
@@ -132,6 +137,8 @@ class CompanionBridge(private val app: LitehubApp, private val scope: CoroutineS
             when (message) {
                 "command_screen_on" -> commands.screen(true)
                 "command_screen_off" -> commands.screen(false)
+                "command_screensaver_on" -> commands.screensaver(true)
+                "command_screensaver_off" -> commands.screensaver(false)
                 "command_screen_brightness_level" -> command?.intOrNull?.let { commands.brightness(it.coerceIn(0, MAX_LEVEL)) }
                 "command_dashboard" -> command?.contentOrNull?.let(commands::dashboard)
                 "command_page" -> command?.intOrNull?.let(commands::page)
@@ -149,6 +156,7 @@ class CompanionBridge(private val app: LitehubApp, private val scope: CoroutineS
         MobileApp.Sensor("dashboard", "dashboard", "sensor", "mdi:view-dashboard"),
         MobileApp.Sensor("last_interaction", "last interaction", "sensor", "mdi:gesture-tap", deviceClass = "timestamp"),
         MobileApp.Sensor("app_version", "app version", "sensor", "mdi:package-variant", diagnostic = true),
+        MobileApp.Sensor("display", "display", "sensor", "mdi:monitor-shimmer"),
     ) + if (battery() != null) listOf(
         MobileApp.Sensor("battery_level", "battery level", "sensor", "mdi:battery", deviceClass = "battery", unit = "%"),
         MobileApp.Sensor("charging", "charging", "binary_sensor", "mdi:battery-charging", deviceClass = "battery_charging"),
@@ -164,6 +172,7 @@ class CompanionBridge(private val app: LitehubApp, private val scope: CoroutineS
             MobileApp.State("dashboard", "sensor", "mdi:view-dashboard", JsonPrimitive(s.dashboard)),
             MobileApp.State("last_interaction", "sensor", "mdi:gesture-tap", JsonPrimitive(Instant.ofEpochMilli(s.lastInteraction).toString())),
             MobileApp.State("app_version", "sensor", "mdi:package-variant", JsonPrimitive(BuildConfig.VERSION_NAME)),
+            MobileApp.State("display", "sensor", "mdi:monitor-shimmer", JsonPrimitive(s.display)),
         )
         battery()?.let { (level, charging) ->
             out += MobileApp.State("battery_level", "sensor", "mdi:battery", JsonPrimitive(level))

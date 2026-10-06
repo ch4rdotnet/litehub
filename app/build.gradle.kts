@@ -40,6 +40,7 @@ dependencies {
     implementation(project(":source:calendar"))
     implementation(project(":source:feed"))
     implementation(project(":source:weather"))
+    implementation(project(":source:photos"))
     implementation(project(":ui:widgets"))
     implementation(project(":ui:editor"))
     implementation(project(":webui"))

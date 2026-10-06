@@ -48,6 +48,11 @@ class LitehubApp : Application() {
 
     val web by lazy { WebHost(this) }
 
+    // for things that outlive the activity, the screensaver keeps watching while it's stopped
+    val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main.immediate)
+
+    val screensaver by lazy { ScreensaverController(this, scope) }
+
     // what's on screen, for the status page
     data class HubState(val dashboard: String = "", val page: Int = 1, val screenOn: Boolean = true)
 

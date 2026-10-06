@@ -192,6 +192,18 @@ class HaClientTest {
     }
 
     @Test
+    fun `a refused subscription reports why`() {
+        ha.accept()
+        val client = client()
+        val errors = LinkedBlockingQueue<String>()
+        runBlocking(confined) {
+            client.subscribe("todo:x", "todo/item/subscribe", buildJsonObject { put("entity_id", "sensor.x") }, onError = { errors += it }) {}
+        }
+        client.start()
+        assertEquals("entity not found", errors.poll(5, TimeUnit.SECONDS))
+    }
+
+    @Test
     fun `a deleted device shows up as a rejected push channel`() {
         ha.accept()
         val client = client()
