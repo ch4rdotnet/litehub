@@ -42,8 +42,21 @@ object WidgetSchemas {
                 SchemaField("feeds", "feeds (none picked shows all)", FieldKind.FEEDS),
             ),
         ),
+        WidgetSchema("weather", "weather now", 1, 1, weather()),
+        WidgetSchema("hourly", "hourly forecast", 2, 1, weather() + SchemaField("hours", "hours", FieldKind.NUMBER, default = JsonPrimitive(WeatherConfig().hours))),
+        WidgetSchema("daily", "daily forecast", 1, 2, weather() + SchemaField("days", "days", FieldKind.NUMBER, default = JsonPrimitive(WeatherConfig().days))),
+        WidgetSchema(
+            "todo", "list", 1, 2,
+            listOf(
+                SchemaField("entity", "todo list", FieldKind.ENTITY, required = true, domains = listOf("todo")),
+                SchemaField("title", "title", FieldKind.TEXT),
+                SchemaField("quick", "quick add chips, comma separated", FieldKind.TEXT),
+            ),
+        ),
         WidgetSchema("placeholder", "placeholder", 1, 1, listOf(SchemaField("title", "title", FieldKind.TEXT))),
     )
 
     fun of(type: String): WidgetSchema? = all.firstOrNull { it.type == type }
+
+    private fun weather() = listOf(SchemaField("entity", "weather entity (none uses open-meteo)", FieldKind.ENTITY, domains = listOf("weather")))
 }

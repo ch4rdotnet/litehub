@@ -27,6 +27,15 @@ data class Moment(val nowMs: Long, val zone: ZoneId, val hour24: Boolean, val lo
         return DateTimeFormatter.ofPattern(pattern, locale).format(t).lowercase(locale)
     }
 
+    fun weekday(date: LocalDate): String = DateTimeFormatter.ofPattern("EEE", locale).format(date).lowercase(locale)
+
+    // on the hour it's just the hour ("7am", "19"), for strips with little room
+    fun hour(ms: Long): String {
+        val t = Instant.ofEpochMilli(ms).atZone(zone)
+        if (t.minute != 0) return time(ms)
+        return DateTimeFormatter.ofPattern(if (hour24) "H" else "ha", locale).format(t).lowercase(locale)
+    }
+
     fun month(date: LocalDate): String = DateTimeFormatter.ofPattern("MMMM yyyy", locale).format(date).lowercase(locale)
 
     // how long ago, as short as it can be

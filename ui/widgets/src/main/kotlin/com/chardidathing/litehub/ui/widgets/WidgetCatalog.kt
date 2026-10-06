@@ -17,6 +17,14 @@ object WidgetCatalog {
 
     // the entity a placement needs, so its state can be loaded before the first frame
     fun entityId(placement: Placement): String? = entityConfig(placement)?.entity
+        ?: if (placement.type in WEATHER) decode(placement, WeatherConfig.serializer())?.entity else null
+
+    fun isWeather(placement: Placement) = placement.type in WEATHER
+
+    // a weather widget's ha entity, null means it wants open-meteo
+    fun weatherEntity(placement: Placement): String? = decode(placement, WeatherConfig.serializer())?.entity
+
+    private val WEATHER = setOf("weather", "hourly", "daily")
 
     fun create(context: Context, theme: ResolvedTheme, icons: Icons, legend: Legend, placement: Placement): WidgetView {
         val type = placement.type
@@ -38,6 +46,15 @@ object WidgetCatalog {
                 ?: broken(context, theme, "month config isn't valid", "see the month widget's fields")
             "headlines" -> decode(placement, HeadlinesConfig.serializer())?.let { HeadlinesWidget(context, theme, it, legend) }
                 ?: broken(context, theme, "headlines config isn't valid", "see the headlines widget's fields")
+            "weather", "hourly", "daily" -> decode(placement, WeatherConfig.serializer())?.let {
+                when (type) {
+                    "weather" -> WeatherNowWidget(context, theme, icons, it)
+                    "hourly" -> HourlyWidget(context, theme, icons, it)
+                    else -> DailyWidget(context, theme, icons, it)
+                }
+            } ?: broken(context, theme, "$type config isn't valid", "see the $type widget's fields")
+            "todo" -> decode(placement, TodoConfig.serializer())?.let { TodoWidget(context, theme, icons, it) }
+                ?: broken(context, theme, "list config isn't valid", "it needs a todo entity")
             // shown as a failure, not dropped, so a typo in the config is visible on screen
             else -> broken(context, theme, "unknown widget", type)
         }
