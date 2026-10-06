@@ -32,6 +32,12 @@ textarea { width: 100%; height: var(--editor-text-height); font-family: monospac
 textarea.short { height: var(--editor-short-height); }
 .bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-s); margin: var(--space-s) 0; }
 .grow { flex: 1; }
+/* the layout tab's controls, the dashboard on the left, the page and its grid stacked on the right */
+.toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: var(--space-m); }
+.stack { display: flex; flex-direction: column; align-items: flex-end; }
+.stack .bar { justify-content: flex-end; margin: var(--space-xs) 0; }
+.toolbar label { display: inline-flex; align-items: center; gap: var(--space-s); }
+.toolbar input[type=checkbox] { margin: 0; width: var(--space-m); height: var(--space-m); }
 .split { display: grid; grid-template-columns: var(--editor-split); gap: var(--space-l); }
 .grid { position: relative; background: var(--background); border-radius: var(--radius); aspect-ratio: var(--screen-aspect); --gap: var(--space-m); touch-action: none; }
 .grid.compact { --gap: var(--space-s); }

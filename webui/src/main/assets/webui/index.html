@@ -27,23 +27,28 @@
 
 <main id="app" hidden>
   <section id="tab-layout" class="tab">
-    <div class="bar">
-      <label>dashboard <select id="dashboard"></select></label>
-      <button id="dash-new">new</button>
-      <button id="dash-copy">duplicate</button>
-      <button id="dash-delete">delete</button>
-      <button id="dash-active">show this one on the hub</button>
-    </div>
-    <div class="bar">
-      <button id="page-prev">prev</button>
-      <span id="page-label"></span>
-      <button id="page-next">next</button>
-      <button id="page-add">add page</button>
-      <button id="page-remove">remove page</button>
-      <span class="grow"></span>
-      <label>grid <input id="grid-columns" class="tiny" type="number" min="1" max="24"> by <input id="grid-rows" class="tiny" type="number" min="1" max="24"></label>
-      <label class="toggle"><input id="grid-keep" type="checkbox" checked>keep tile sizes</label>
-      <select id="grid-density"><option value="comfortable">comfortable</option><option value="compact">compact</option></select>
+    <div class="toolbar">
+      <div class="bar">
+        <label>dashboard <select id="dashboard"></select></label>
+        <button id="dash-new">new</button>
+        <button id="dash-copy">duplicate</button>
+        <button id="dash-delete">delete</button>
+        <button id="dash-active">show this one on the hub</button>
+      </div>
+      <div class="stack">
+        <div class="bar">
+          <button id="page-prev">prev</button>
+          <span id="page-label"></span>
+          <button id="page-next">next</button>
+          <button id="page-add">add page</button>
+          <button id="page-remove">remove page</button>
+        </div>
+        <div class="bar">
+          <label>grid <input id="grid-columns" class="tiny" type="number" min="1" max="24"> by <input id="grid-rows" class="tiny" type="number" min="1" max="24"></label>
+          <label class="toggle"><input id="grid-keep" type="checkbox" checked>keep tile sizes</label>
+          <select id="grid-density"><option value="comfortable">comfortable</option><option value="compact">compact</option></select>
+        </div>
+      </div>
     </div>
     <div class="split">
       <div>
