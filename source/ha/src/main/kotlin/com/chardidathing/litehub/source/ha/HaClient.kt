@@ -11,7 +11,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
@@ -113,7 +115,18 @@ class HaClient(
         entityId: String,
         data: JsonObject? = null,
         returnResponse: Boolean = false,
-    ): Result<JsonObject?> {
+    ): Result<JsonObject?> = request("call_service") {
+        put("domain", domain)
+        put("service", service)
+        putJsonObject("target") { put("entity_id", entityId) }
+        if (data != null) put("service_data", data)
+        if (returnResponse) put("return_response", true)
+    }.map { (it as? JsonObject)?.get("response") as? JsonObject }
+
+    // any one shot websocket command (get_states, the registries), answers with its result
+    suspend fun command(type: String): Result<JsonElement?> = request(type) {}
+
+    private suspend fun request(type: String, fields: JsonObjectBuilder.() -> Unit): Result<JsonElement?> {
         val ws = socket ?: return Result.failure(IOException("not connected to home assistant"))
         val id = nextId++
         val reply = CompletableDeferred<JsonObject>()
@@ -121,18 +134,14 @@ class HaClient(
         ws.send(
             buildJsonObject {
                 put("id", id)
-                put("type", "call_service")
-                put("domain", domain)
-                put("service", service)
-                putJsonObject("target") { put("entity_id", entityId) }
-                if (data != null) put("service_data", data)
-                if (returnResponse) put("return_response", true)
+                put("type", type)
+                fields()
             }.toString(),
         )
         return try {
             val result = withTimeout(timing.commandTimeout) { reply.await() }
             if ((result["success"] as? JsonPrimitive)?.booleanOrNull == true) {
-                Result.success((result["result"] as? JsonObject)?.get("response") as? JsonObject)
+                Result.success(result["result"])
             } else {
                 val message = (result["error"] as? JsonObject)?.string("message")
                 Result.failure(IOException(message?.replaceFirstChar { it.lowercase() } ?: "home assistant refused"))

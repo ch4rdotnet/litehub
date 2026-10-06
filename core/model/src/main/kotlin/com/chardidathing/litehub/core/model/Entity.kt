@@ -32,3 +32,7 @@ sealed interface EntitySnapshot {
 
     data class Failed(val reason: String) : EntitySnapshot
 }
+
+// one row in the editor's entity picker
+@Serializable
+data class EntityChoice(val id: String, val name: String, val area: String?)

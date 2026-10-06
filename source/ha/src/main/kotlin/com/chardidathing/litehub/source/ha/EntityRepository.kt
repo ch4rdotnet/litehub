@@ -2,6 +2,7 @@ package com.chardidathing.litehub.source.ha
 
 import android.database.sqlite.SQLiteException
 import com.chardidathing.litehub.core.model.Entity
+import com.chardidathing.litehub.core.model.EntityChoice
 import com.chardidathing.litehub.core.model.EntitySnapshot
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -87,6 +88,17 @@ class EntityRepository(
     }
 
     fun canToggle(id: String) = id.substringBefore('.') in TOGGLE_DOMAINS
+
+    // every entity ha knows, named and grouped by area, for the editor's picker
+    suspend fun catalogue(): Result<List<EntityChoice>> = withContext(confined) {
+        val c = client ?: return@withContext Result.failure(IOException(statusReason()))
+        val states = c.command("get_states").getOrElse { return@withContext Result.failure(it) }
+        // the registries are nice to have, an old ha without them still gets a flat list
+        val entities = c.command("config/entity_registry/list_for_display").getOrNull()
+        val devices = c.command("config/device_registry/list").getOrNull()
+        val areas = c.command("config/area_registry/list").getOrNull()
+        Result.success(EntityCatalogue.build(states, entities, devices, areas))
+    }
 
     // a service call that answers with data, fails straight away while ha isn't connected
     suspend fun query(domain: String, service: String, entityId: String, data: JsonObject): Result<JsonObject?> =
