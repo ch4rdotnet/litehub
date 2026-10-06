@@ -9,12 +9,14 @@ coroutines = "1.10.2"
 serialization = "1.9.0"
 okhttp = "5.5.0"
 libRecur = "0.17.1"
+nanohttpd = "2.3.1"
 junit = "4.13.2"
 
 [libraries]
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serialization" }
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
+nanohttpd = { group = "org.nanohttpd", name = "nanohttpd", version.ref = "nanohttpd" }
 lib-recur = { group = "org.dmfs", name = "lib-recur", version.ref = "libRecur" }
 mockwebserver = { group = "com.squareup.okhttp3", name = "mockwebserver3", version.ref = "okhttp" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
