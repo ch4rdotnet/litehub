@@ -10,12 +10,15 @@ import android.widget.TextView
 import com.chardidathing.litehub.core.model.SettingsSection
 import com.chardidathing.litehub.ui.components.ButtonView
 import com.chardidathing.litehub.ui.tokens.ResolvedTheme
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 
-// the hub's own settings. sections down the left, the picked one's fields on the right, one
-// set of edits across all of them until save or cancel. action sections hold buttons instead
-// of fields (the pin, android's settings)
+// the hub's own settings. sections down the left, the picked one on the right, one set of edits
+// across all of them until save or cancel. a list section (calendars) shows its items, each
+// edited on its own page. action sections hold buttons instead of fields (the pin, android's settings)
 @SuppressLint("ViewConstructor")
 class SettingsScreen(
     context: Context,
@@ -31,6 +34,10 @@ class SettingsScreen(
 
     interface Host {
         fun pickEntity(domains: List<String>, onPicked: (String) -> Unit)
+        // a blank item for a list section
+        fun newItem(section: String): JsonObject
+        // values a section action fills in, or why it couldn't
+        fun action(id: String, done: (Result<JsonObject>) -> Unit)
         fun save(values: JsonObject)
         fun cancel()
     }
@@ -39,6 +46,7 @@ class SettingsScreen(
     private val tabs = ArrayList<ButtonView>()
     private val pane = LinearLayout(context).apply { orientation = VERTICAL }
     private val problem = TextView(context).styled(theme.type.body2, theme.colors.error)
+    private val bar = LinearLayout(context).apply { orientation = HORIZONTAL }
     private var picked = 0
 
     init {
@@ -64,7 +72,6 @@ class SettingsScreen(
         val right = LinearLayout(context).apply { orientation = VERTICAL }
         right.addView(ScrollView(context).apply { addView(pane) }, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         right.addView(problem)
-        val bar = LinearLayout(context).apply { orientation = HORIZONTAL }
         bar.addView(ButtonView(context, theme, "save") { host.save(JsonObject(values)) })
         bar.addView(space(gap))
         bar.addView(ButtonView(context, theme, "cancel") { host.cancel() })
@@ -84,20 +91,87 @@ class SettingsScreen(
 
     private fun show(index: Int) {
         picked = index
+        bar.visibility = VISIBLE
         tabs.forEachIndexed { i, t -> t.checked = i == index }
         pane.removeAllViews()
         val section = sections.getOrNull(index)
-        if (section != null) {
-            pane.addView(TextView(context).styled(theme.type.h6, theme.colors.onBackground).apply { text = section.name })
-            pane.addView(FieldForm(context, theme, section.fields, values, null, host::pickEntity))
+        if (section == null) {
+            showActions(actions[index - sections.size])
             return
         }
-        val group = actions[index - sections.size]
-        pane.addView(TextView(context).styled(theme.type.h6, theme.colors.onBackground).apply { text = group.name })
+        heading(section.name)
+        if (section.fields.isNotEmpty()) pane.addView(FieldForm(context, theme, section.fields, values, null, host::pickEntity))
+        if (section.items != null) showItems(section)
+        for (action in section.actions) {
+            pane.addView(space(theme.spacing.m.toInt()))
+            pane.addView(ButtonView(context, theme, action.label) { run(action.value) })
+        }
+    }
+
+    private fun showActions(group: ActionSection) {
+        heading(group.name)
         for ((label, action) in group.items()) {
             pane.addView(space(theme.spacing.m.toInt()))
             pane.addView(ButtonView(context, theme, label, action))
         }
+    }
+
+    private fun items(section: SettingsSection) = (values[section.id] as? JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()
+
+    private fun name(item: JsonObject) = (item["name"] as? JsonPrimitive)?.contentOrNull?.ifBlank { null }
+
+    // tap one to change it, and a button for a new one
+    private fun showItems(section: SettingsSection) {
+        val list = items(section)
+        if (list.isEmpty()) pane.addView(TextView(context).styled(theme.type.body2, theme.colors.onBackground).apply { text = "no ${section.name} yet" })
+        list.forEachIndexed { i, item ->
+            pane.addView(space(theme.spacing.s.toInt()))
+            pane.addView(ButtonView(context, theme, name(item) ?: "unnamed ${section.itemName}") { editItem(section, i) })
+        }
+        pane.addView(space(theme.spacing.m.toInt()))
+        pane.addView(ButtonView(context, theme, "add a ${section.itemName}") { editItem(section, -1) })
+    }
+
+    // one item on its own page. done puts it back in the list, save still has to be pressed
+    private fun editItem(section: SettingsSection, index: Int) {
+        val list = items(section)
+        val item = HashMap<String, JsonElement>(list.getOrNull(index) ?: host.newItem(section.id))
+        bar.visibility = GONE
+        pane.removeAllViews()
+        heading(name(JsonObject(item)) ?: "new ${section.itemName}")
+        pane.addView(FieldForm(context, theme, section.items.orEmpty(), item, null, host::pickEntity))
+        pane.addView(space(theme.spacing.m.toInt()))
+        val row = LinearLayout(context).apply { orientation = HORIZONTAL }
+        row.addView(ButtonView(context, theme, "done") {
+            val next = list.toMutableList()
+            if (index < 0) next += JsonObject(item) else next[index] = JsonObject(item)
+            values[section.id] = JsonArray(next)
+            show(picked)
+        })
+        if (index >= 0) {
+            row.addView(space(theme.spacing.s.toInt()))
+            row.addView(ButtonView(context, theme, "remove") {
+                values[section.id] = JsonArray(list.filterIndexed { i, _ -> i != index })
+                show(picked)
+            })
+        }
+        row.addView(space(theme.spacing.s.toInt()))
+        row.addView(ButtonView(context, theme, "back") { show(picked) })
+        pane.addView(row)
+    }
+
+    private fun run(action: String) {
+        say("", error = false)
+        host.action(action) { result ->
+            result.onSuccess {
+                values.putAll(it)
+                show(picked)
+            }.onFailure { say(it.message ?: "that didn't work", error = true) }
+        }
+    }
+
+    private fun heading(text: String) {
+        pane.addView(TextView(context).styled(theme.type.h6, theme.colors.onBackground).apply { this.text = text })
     }
 
     private fun space(size: Int) = View(context).apply { layoutParams = LayoutParams(size, size) }

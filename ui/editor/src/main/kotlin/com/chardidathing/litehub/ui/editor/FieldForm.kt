@@ -10,9 +10,11 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.chardidathing.litehub.core.model.FieldKind
+import com.chardidathing.litehub.core.model.Hex
 import com.chardidathing.litehub.core.model.SchemaField
 import com.chardidathing.litehub.core.model.shownWith
 import com.chardidathing.litehub.ui.components.ButtonView
+import com.chardidathing.litehub.ui.components.SwatchView
 import com.chardidathing.litehub.ui.tokens.ResolvedTheme
 import com.chardidathing.litehub.ui.widgets.Legend
 import kotlinx.serialization.json.JsonArray
@@ -42,9 +44,10 @@ class FieldForm(
             val row = LinearLayout(context).apply { orientation = VERTICAL }
             row.addView(space(gap))
             row.addView(TextView(context).styled(theme.type.subtitle2, theme.colors.onBackground).apply { text = field.label })
-            // text boxes take the row, buttons stay their own size
+            // text boxes take the row (the colour row has one), buttons stay their own size
             val c = control(field)
-            row.addView(c, LayoutParams(if (c is EditText) LayoutParams.MATCH_PARENT else LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
+            val fill = c is EditText || field.kind == FieldKind.COLOR
+            row.addView(c, LayoutParams(if (fill) LayoutParams.MATCH_PARENT else LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
             rows[field.key] = row
             addView(row)
         }
@@ -63,6 +66,7 @@ class FieldForm(
         FieldKind.CHOICE -> choice(field)
         FieldKind.ENTITY -> entity(field)
         FieldKind.ENTITIES -> entities(field)
+        FieldKind.COLOR -> color(field)
         FieldKind.CALENDARS -> sources(field, legend?.calendars.orEmpty())
         FieldKind.FEEDS -> sources(field, legend?.feeds.orEmpty())
     }
@@ -70,7 +74,7 @@ class FieldForm(
     private fun input(field: SchemaField) = EditText(context).styledInput(theme).apply {
         setText(text(field.key) ?: (field.default as? JsonPrimitive)?.contentOrNull.orEmpty())
         inputType = when (field.kind) {
-            FieldKind.NUMBER -> InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+            FieldKind.NUMBER -> InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL or InputType.TYPE_NUMBER_FLAG_SIGNED
             FieldKind.TIME -> InputType.TYPE_CLASS_DATETIME or InputType.TYPE_DATETIME_VARIATION_TIME
             FieldKind.SECRET -> InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
             else -> InputType.TYPE_CLASS_TEXT
@@ -126,6 +130,55 @@ class FieldForm(
             box.addView(b)
             box.addView(space(theme.spacing.s.toInt()))
         }
+        mark()
+        return box
+    }
+
+    // auto, the theme's palette, or any "#rrggbb" typed in the box beside them
+    private fun color(field: SchemaField): LinearLayout {
+        val box = LinearLayout(context).apply {
+            orientation = HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+        }
+        val gap = theme.spacing.s.toInt()
+        val swatches = ArrayList<Pair<Int, SwatchView>>()
+        lateinit var auto: ButtonView
+        lateinit var typed: EditText
+        fun mark() {
+            val current = text(field.key)?.let(Hex::parse)
+            auto.checked = current == null
+            for ((c, v) in swatches) v.checked = c == current
+        }
+        fun pick(value: String) {
+            values[field.key] = JsonPrimitive(value)
+            typed.setText(value)
+            mark()
+        }
+        auto = ButtonView(context, theme, "auto") { pick("") }
+        box.addView(auto)
+        for (c in theme.palette.distinct()) {
+            val swatch = SwatchView(context, theme, c) { pick(Hex.of(c)) }
+            swatches += c to swatch
+            box.addView(space(gap))
+            box.addView(swatch)
+        }
+        typed = EditText(context).styledInput(theme).apply {
+            hint = "#rrggbb"
+            setText(text(field.key).orEmpty())
+            addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
+                override fun afterTextChanged(s: Editable?) {
+                    val t = s?.toString()?.trim().orEmpty()
+                    if (t != text(field.key)) {
+                        values[field.key] = JsonPrimitive(t)
+                        mark()
+                    }
+                }
+            })
+        }
+        box.addView(space(gap))
+        box.addView(typed, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
         mark()
         return box
     }
