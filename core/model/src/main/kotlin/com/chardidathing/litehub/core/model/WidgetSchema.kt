@@ -40,9 +40,18 @@ fun SchemaField.shownWith(values: Map<String, JsonElement>): Boolean =
 @Serializable
 data class Choice(val value: String, val label: String)
 
-// a group of the hub's own settings, read by both settings screens (on device and web)
+// a group of the hub's own settings, read by both settings screens (on device and web). a section
+// with items is a list (calendars, feeds), its value is an array of objects with those fields.
+// actions are buttons that fill fields in from somewhere else (ha's home location)
 @Serializable
-data class SettingsSection(val id: String, val name: String, val fields: List<SchemaField>)
+data class SettingsSection(
+    val id: String,
+    val name: String,
+    val fields: List<SchemaField> = emptyList(),
+    val items: List<SchemaField>? = null,
+    val itemName: String? = null,
+    val actions: List<Choice> = emptyList(),
+)
 
 @Serializable
 enum class FieldKind {
@@ -58,4 +67,6 @@ enum class FieldKind {
     @SerialName("entities") ENTITIES,
     // never sent back out, left blank it keeps what's there
     @SerialName("secret") SECRET,
+    // "#rrggbb", blank for automatic
+    @SerialName("color") COLOR,
 }
