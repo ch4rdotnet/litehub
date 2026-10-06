@@ -254,15 +254,12 @@ class EntityRepository(
     suspend fun toggle(id: String): Result<JsonObject?> = withContext(confined) {
         val c = client ?: return@withContext Result.failure(IOException(statusReason()))
         val current = entities[id]
-        val guess = when (current?.state) {
-            "on" -> current.copy(state = "off")
-            "off" -> current.copy(state = "on")
-            else -> null
-        }
+        val (service, guessState) = tap(id, current?.state)
+        val guess = guessState?.let { current?.copy(state = it) }
         errors.remove(id)
         if (guess != null) optimistic[id] = guess
         publish(id)
-        val result = c.callService(id.substringBefore('.'), "toggle", id)
+        val result = c.callService(id.substringBefore('.'), service, id)
         if (result.isFailure) {
             if (guess != null) optimistic.remove(id)
             val message = result.exceptionOrNull()?.message ?: "home assistant refused"
@@ -363,10 +360,21 @@ class EntityRepository(
         }
     }
 
-    private companion object {
+    internal companion object {
         const val NANOS_PER_MS = 1_000_000L
         const val CONNECTING = "connecting"
 
-        val TOGGLE_DOMAINS = setOf("light", "switch", "fan", "input_boolean", "automation", "siren", "humidifier")
+        val TOGGLE_DOMAINS = setOf("light", "switch", "fan", "input_boolean", "automation", "siren", "humidifier", "lock")
+
+        // the service a tap calls and the state to show until ha answers (null shows nothing new).
+        // locks have no toggle in ha, anything but locked locks, the safe way round
+        fun tap(id: String, state: String?): Pair<String, String?> = when (id.substringBefore('.')) {
+            "lock" -> if (state == "locked") "unlock" to "unlocking" else "lock" to "locking"
+            else -> "toggle" to when (state) {
+                "on" -> "off"
+                "off" -> "on"
+                else -> null
+            }
+        }
     }
 }
