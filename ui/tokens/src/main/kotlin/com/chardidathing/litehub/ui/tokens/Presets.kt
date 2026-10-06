@@ -119,6 +119,9 @@ object Presets {
 
     val all = listOf(md2Light, md2Dark, oled)
 
+    // what a "screen off" overlay draws, black pixels are dark on lcd and off on oled
+    const val SCREEN_OFF = 0xFF000000.toInt()
+
     // used when there's no usable config to pick a theme from
     val fallbackLight = md2Light
     val fallbackDark = md2Dark
