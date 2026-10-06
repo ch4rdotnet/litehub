@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>litehub status</title>
+<link rel="stylesheet" href="/theme.css">
+<style>
+  @font-face { font-family: lexend; src: url(/fonts/regular.ttf); }
+  body { margin: 0; padding: var(--space-l); background: var(--background); color: var(--on-background); font: 400 var(--body1) lexend, sans-serif; }
+  h1 { font-size: var(--h5); font-weight: 400; margin: 0 0 var(--space-m); }
+  h2 { font-size: var(--h6); font-weight: 500; margin: var(--space-l) 0 var(--space-s); }
+  table { border-collapse: collapse; }
+  td { padding: var(--space-xs) var(--space-l) var(--space-xs) 0; vertical-align: top; }
+  .error { color: var(--error); }
+  pre { background: var(--surface); color: var(--on-surface); padding: var(--space-m); border-radius: var(--radius); font-size: var(--body2); white-space: pre-wrap; }
+  a { color: var(--on-background); }
+</style>
+</head>
+<body>
+<h1>litehub status</h1>
+<p>the same as json at <a href="/api/status">/api/status</a>, refreshes every 10 seconds</p>
+<div id="out"></div>
+<script src="/status.js"></script>
+</body>
+</html>

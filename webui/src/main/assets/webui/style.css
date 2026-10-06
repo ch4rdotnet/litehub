@@ -1,0 +1,50 @@
+/* design values come from /theme.css, which the hub writes from its own theme tokens.
+   the editor's own page layout values live here, once */
+:root {
+  --editor-split: 2fr 1fr;
+  --editor-field: 40em;
+  --editor-text-height: 70vh;
+  --editor-line: 1px;
+  --control: calc(var(--touch) / 2);
+}
+@font-face { font-family: lexend; src: url(/fonts/regular.ttf); font-weight: 400; }
+@font-face { font-family: lexend; src: url(/fonts/medium.ttf); font-weight: 500; }
+@font-face { font-family: lexend; src: url(/fonts/semibold.ttf); font-weight: 600; }
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--background); color: var(--on-background); font: 400 var(--body1) lexend, sans-serif; }
+header { display: flex; align-items: center; gap: var(--space-l); padding: var(--space-m) var(--space-l); }
+h1 { font-size: var(--h5); font-weight: 400; margin: 0; }
+h2 { font-size: var(--h6); font-weight: 500; margin: var(--space-l) 0 var(--space-s); }
+nav { display: flex; gap: var(--space-s); align-items: center; }
+nav a { color: var(--on-background); }
+main, #login { padding: 0 var(--space-l) var(--space-l); }
+button, select, input, textarea { font: inherit; color: var(--on-surface); background: var(--surface); border: 0; border-radius: var(--radius); padding: var(--space-s) var(--space-m); }
+button { cursor: pointer; min-height: var(--control); }
+button.on, button.primary { background: var(--primary); color: var(--on-primary); }
+button:disabled { visibility: hidden; }
+input, select { min-height: var(--control); }
+textarea { width: 100%; height: var(--editor-text-height); font-family: monospace; font-size: var(--body2); }
+.bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-s); margin: var(--space-s) 0; }
+.grow { flex: 1; }
+.split { display: grid; grid-template-columns: var(--editor-split); gap: var(--space-l); }
+.grid { position: relative; display: grid; gap: var(--space-m); padding: var(--space-m); background: var(--background); border-radius: var(--radius); aspect-ratio: var(--screen-aspect); }
+.cell { border: var(--editor-line) dashed var(--surface); border-radius: var(--radius); }
+.box { position: relative; background: var(--surface); border: 2px solid var(--primary); border-radius: var(--radius); padding: var(--space-s); overflow: hidden; cursor: grab; touch-action: none; user-select: none; }
+.box.picked { background: var(--primary); color: var(--on-primary); }
+.box.bad { border-color: var(--error); }
+.box small { display: block; }
+.handle { position: absolute; right: 0; bottom: 0; width: var(--space-l); height: var(--space-l); background: var(--primary); cursor: nwse-resize; }
+aside img { width: 100%; border-radius: var(--radius); background: var(--surface); }
+#settings label { display: block; margin: var(--space-s) 0; }
+#settings input { width: 100%; }
+.checks { display: flex; flex-wrap: wrap; gap: var(--space-s); }
+.checks label { display: inline-flex; gap: var(--space-xs); align-items: center; }
+.error { color: var(--error); }
+.muted { color: var(--on-background); }
+.file input { display: none; }
+.file { background: var(--surface); border-radius: var(--radius); padding: var(--space-s) var(--space-m); cursor: pointer; }
+#tab-connections label { display: block; margin: var(--space-s) 0; }
+#tab-connections input { width: 100%; max-width: var(--editor-field); }
+/* css variables can't be used in a media query, so the one breakpoint stays here */
+@media (max-width: 900px) { .split { grid-template-columns: 1fr; } }

@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>litehub</title>
+<link rel="stylesheet" href="/theme.css">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header>
+  <h1>litehub</h1>
+  <nav>
+    <button data-tab="layout" class="on">layout</button>
+    <button data-tab="json">json</button>
+    <button data-tab="connections">connections</button>
+    <a href="/status" target="_blank">status</a>
+  </nav>
+</header>
+
+<section id="login" hidden>
+  <h2>enter the hub's pin</h2>
+  <form id="login-form"><input id="pin" type="password" inputmode="numeric" autocomplete="off"><button>open</button></form>
+  <p id="login-error" class="error"></p>
+</section>
+
+<main id="app" hidden>
+  <section id="tab-layout" class="tab">
+    <div class="bar">
+      <label>dashboard <select id="dashboard"></select></label>
+      <button id="dash-new">new</button>
+      <button id="dash-copy">duplicate</button>
+      <button id="dash-delete">delete</button>
+      <button id="dash-active">show this one on the hub</button>
+      <span class="grow"></span>
+      <span id="page-label"></span>
+      <button id="page-prev">prev</button>
+      <button id="page-next">next</button>
+      <button id="page-add">add page</button>
+      <button id="page-remove">remove page</button>
+    </div>
+    <div class="split">
+      <div>
+        <div id="grid" class="grid"></div>
+        <div class="bar">
+          <select id="add-type"></select>
+          <button id="add">add widget</button>
+          <span class="grow"></span>
+          <button id="save" class="primary">save to hub</button>
+        </div>
+        <p id="message"></p>
+      </div>
+      <aside>
+        <form id="settings"><p class="muted">pick a widget to change it</p></form>
+        <h2>on the hub now</h2>
+        <img id="preview" alt="the hub's screen">
+      </aside>
+    </div>
+  </section>
+
+  <section id="tab-json" class="tab" hidden>
+    <div class="bar">
+      <button id="json-apply" class="primary">save to hub</button>
+      <button id="export">export</button>
+      <label class="file">import <input id="import" type="file" accept="application/json,.json"></label>
+    </div>
+    <textarea id="json" spellcheck="false"></textarea>
+    <p id="json-message"></p>
+  </section>
+
+  <section id="tab-connections" class="tab" hidden>
+    <h2>home assistant</h2>
+    <form id="ha-form">
+      <label>url <input id="ha-url" placeholder="http://homeassistant.local:8123"></label>
+      <label>long lived token <input id="ha-token" type="password" autocomplete="off"></label>
+      <button class="primary">save</button>
+    </form>
+    <p id="ha-message"></p>
+    <h2>calendars and feeds (sources.json)</h2>
+    <textarea id="sources" spellcheck="false"></textarea>
+    <div class="bar"><button id="sources-save" class="primary">save</button></div>
+    <p id="sources-message"></p>
+  </section>
+</main>
+<datalist id="entities"></datalist>
+<script src="/app.js"></script>
+</body>
+</html>
