@@ -3,6 +3,8 @@
 :root {
   --editor-split: 2fr 1fr;
   --settings-split: 1fr 3fr;
+  --editor-dialog: 60em;
+  --editor-card: 14em;
   --editor-field: 40em;
   --editor-text-height: 70vh;
   --editor-short-height: 30vh;
@@ -31,13 +33,41 @@ textarea.short { height: var(--editor-short-height); }
 .bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-s); margin: var(--space-s) 0; }
 .grow { flex: 1; }
 .split { display: grid; grid-template-columns: var(--editor-split); gap: var(--space-l); }
-.grid { position: relative; display: grid; gap: var(--space-m); padding: var(--space-m); background: var(--background); border-radius: var(--radius); aspect-ratio: var(--screen-aspect); }
-.cell { border: var(--editor-line) dashed var(--surface); border-radius: var(--radius); }
-.box { position: relative; background: var(--surface); border: 2px solid var(--primary); border-radius: var(--radius); padding: var(--space-s); overflow: hidden; cursor: grab; touch-action: none; user-select: none; }
-.box.picked { background: var(--primary); color: var(--on-primary); }
-.box.bad { border-color: var(--error); }
-.box small { display: block; }
-.handle { position: absolute; right: 0; bottom: 0; width: var(--space-l); height: var(--space-l); background: var(--primary); cursor: nwse-resize; }
+.grid { position: relative; background: var(--background); border-radius: var(--radius); aspect-ratio: var(--screen-aspect); --gap: var(--space-m); touch-action: none; }
+.grid.compact { --gap: var(--space-s); }
+.cells { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(var(--columns), 1fr); grid-template-rows: repeat(var(--rows), 1fr); }
+.cells i { margin: calc(var(--gap) / 2); border: var(--editor-line) dashed var(--surface); border-radius: var(--radius); }
+.slot, .ghost { position: absolute; padding: calc(var(--gap) / 2); transition: left var(--slide), top var(--slide), width var(--slide), height var(--slide); }
+.ghost { pointer-events: none; }
+.ghost::after { content: ""; display: block; height: 100%; border: 2px dashed var(--primary); border-radius: var(--radius); }
+.ghost.bad::after { border-color: var(--error); }
+.slot.dragging { transition: none; z-index: 2; cursor: grabbing; }
+.slot.dragging .box { box-shadow: 0 var(--space-s) var(--space-l) var(--background); }
+.box { container-type: size; position: relative; height: 100%; display: flex; flex-direction: column; gap: var(--space-xs); background: var(--surface); border: 2px solid transparent; border-radius: var(--radius); padding: var(--space-s) var(--space-m); overflow: hidden; cursor: grab; user-select: none; }
+.box:hover { border-color: var(--on-surface); }
+.slot.picked .box { border-color: var(--primary); }
+.kind { font-size: var(--body2); color: var(--primary); }
+.box strong { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.box small { font-size: var(--body2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.size { position: absolute; right: var(--space-s); top: var(--space-s); font-size: var(--body2); }
+.minis { display: flex; flex-wrap: wrap; gap: var(--space-xs); overflow: hidden; }
+.minis span { background: var(--background); border-radius: var(--radius-small); padding: 0 var(--space-xs); font-size: var(--body2); white-space: nowrap; }
+.handle { position: absolute; right: 0; bottom: 0; width: var(--space-l); height: var(--space-l); border-radius: var(--radius) 0 var(--radius) 0; background: var(--primary); cursor: nwse-resize; opacity: 0; }
+.box:hover .handle, .slot.picked .handle { opacity: 1; }
+input.tiny { width: 4em; }
+.hint { font-size: var(--body2); }
+dialog { background: var(--background); color: var(--on-background); border: 0; border-radius: var(--radius); padding: var(--space-l); width: min(var(--editor-dialog), 92vw); max-height: 85vh; }
+dialog::backdrop { background: var(--scrim); }
+dialog h2 { margin: 0; }
+.picker-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--editor-card), 1fr)); gap: var(--space-m); overflow: auto; }
+.card { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-xs); text-align: left; padding: var(--space-m); }
+.card:hover { outline: 2px solid var(--primary); }
+.card small { font-size: var(--body2); }
+.shape { display: grid; grid-template-columns: repeat(var(--w), var(--space-l)); grid-auto-rows: var(--space-l); gap: var(--space-xs); margin-bottom: var(--space-s); }
+.shape i { background: var(--primary); border-radius: var(--radius-small); }
+.chips { display: flex; flex-wrap: wrap; gap: var(--space-xs); align-items: center; }
+.chip { display: inline-flex; align-items: center; gap: var(--space-xs); background: var(--surface); border-radius: var(--radius); padding: 0 0 0 var(--space-s); }
+.chip button { min-height: 0; padding: var(--space-xs) var(--space-s); background: transparent; }
 aside img { width: 100%; border-radius: var(--radius); background: var(--surface); }
 #settings label { display: block; margin: var(--space-s) 0; }
 #settings input { width: 100%; }
@@ -57,5 +87,7 @@ aside img { width: 100%; border-radius: var(--radius); background: var(--surface
 .swatches .swatch.on { outline: var(--space-xs) solid var(--on-background); }
 #settings-form .swatches input { display: inline-block; width: auto; flex: 1; }
 #settings-form .item { display: block; width: 100%; max-width: var(--editor-field); text-align: left; margin: var(--space-s) 0; }
+/* a tile too narrow for its size label as well as its type name drops the size, the type matters more */
+@container (max-width: 10em) { .size { display: none; } }
 /* css variables can't be used in a media query, so the one breakpoint stays here */
 @media (max-width: 900px) { .split, .settings { grid-template-columns: 1fr; } }

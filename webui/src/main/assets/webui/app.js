@@ -1,7 +1,12 @@
 // the browser editor. edits a copy of config.json and saves it back whole, the hub checks it
 // before it's written, so a broken edit never reaches the screen
 const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 let config = null, schemas = [], sources = { calendars: [], feeds: [] }, entities = [], dash = 0, page = 0, picked = -1;
+// whole config snapshots for undo, and what the hub last saved so unsaved changes show
+let undoStack = [], redoStack = [], savedText = "";
+// a pointer has to move this far before a press on a tile counts as a drag (css px)
+const DRAG_SLOP = 4;
 
 async function api(path, options = {}) {
   const r = await fetch(path, options);
@@ -32,12 +37,12 @@ async function start() {
     schemas = JSON.parse(await api("/api/schema"));
     config = JSON.parse(await api("/api/config"));
   } catch (e) { return; }
+  savedText = JSON.stringify(config);
   $("app").hidden = false;
   dash = Math.max(0, config.dashboards.findIndex((d) => d.id === config.activeDashboard));
-  $("add-type").innerHTML = schemas.map((s) => `<option value="${s.type}">${s.name}</option>`).join("");
   loadSettings();
   api("/api/sources").then((t) => { sources = JSON.parse(t); }).catch(() => {});
-  api("/api/entities").then((t) => { entities = JSON.parse(t); drawSettings(); }).catch(() => {});
+  api("/api/entities").then((t) => { entities = JSON.parse(t); render(); }).catch(() => {});
   render();
   refreshPreview();
   setInterval(refreshPreview, 30000);
@@ -47,80 +52,292 @@ function refreshPreview() { $("preview").src = "/api/preview.png?t=" + Date.now(
 
 const board = () => config.dashboards[dash];
 const current = () => board().pages[page];
+const schemaOf = (type) => schemas.find((s) => s.type === type);
+const entityName = (id) => entities.find((e) => e.id === id)?.name;
+
+// call before changing config, so undo can go back to it
+function remember() {
+  undoStack.push(JSON.stringify(config));
+  redoStack = [];
+}
+
+function undo() {
+  if (!undoStack.length) return;
+  redoStack.push(JSON.stringify(config));
+  config = JSON.parse(undoStack.pop());
+  picked = -1;
+  render();
+}
+
+function redo() {
+  if (!redoStack.length) return;
+  undoStack.push(JSON.stringify(config));
+  config = JSON.parse(redoStack.pop());
+  picked = -1;
+  render();
+}
+
+const dirty = () => JSON.stringify(config) !== savedText;
+window.addEventListener("beforeunload", (e) => { if (config && dirty()) e.preventDefault(); });
 
 function render() {
   $("dashboard").innerHTML = config.dashboards.map((d, i) =>
-    `<option value="${i}" ${i === dash ? "selected" : ""}>${d.name}${d.id === config.activeDashboard ? " (on the hub)" : ""}</option>`).join("");
+    `<option value="${i}" ${i === dash ? "selected" : ""}>${esc(d.name)}${d.id === config.activeDashboard ? " (on the hub)" : ""}</option>`).join("");
   $("dash-delete").disabled = config.dashboards.length < 2;
   $("dash-active").disabled = board().id === config.activeDashboard;
   page = Math.min(page, board().pages.length - 1);
+  const p = current();
   $("page-label").textContent = `page ${page + 1} of ${board().pages.length}`;
   $("page-prev").disabled = page === 0;
   $("page-next").disabled = page === board().pages.length - 1;
   $("page-remove").disabled = board().pages.length < 2;
+  $("grid-columns").value = p.columns;
+  $("grid-rows").value = p.rows;
+  $("grid-density").value = p.density || "comfortable";
+  $("undo").disabled = !undoStack.length;
+  $("redo").disabled = !redoStack.length;
+  $("dirty").textContent = dirty() ? "unsaved changes" : "";
   drawGrid();
   drawSettings();
 }
 
+// the layout geometry, all in grid cells
+const overlaps = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+const inside = (w, p) => w.x >= 0 && w.y >= 0 && w.w >= 1 && w.h >= 1 && w.x + w.w <= p.columns && w.y + w.h <= p.rows;
+
+// the free spot nearest where w is now, avoiding the tiles listed in taken
+function nearest(w, list, taken, p) {
+  let best = null, bestDistance = Infinity;
+  for (let y = 0; y + w.h <= p.rows; y++) for (let x = 0; x + w.w <= p.columns; x++) {
+    const c = { x, y, w: w.w, h: w.h };
+    if (taken.some((t) => overlaps(c, list[t]))) continue;
+    const d = Math.abs(x - w.x) + Math.abs(y - w.y);
+    if (d < bestDistance) { bestDistance = d; best = { x, y }; }
+  }
+  return best;
+}
+
+// tile i goes where it's put, anything it lands on moves to the nearest free space (biggest
+// first, so they get the room). null when something can't fit anywhere
+function arrange(list, i, next, p) {
+  if (!inside(next, p)) return null;
+  const out = list.map((w) => ({ ...w }));
+  out[i] = { ...out[i], x: next.x, y: next.y, w: next.w, h: next.h };
+  const bumped = out.map((_, j) => j).filter((j) => j !== i && overlaps(out[j], out[i]));
+  const settled = [i, ...out.map((_, j) => j).filter((j) => j !== i && !bumped.includes(j))];
+  bumped.sort((a, b) => out[b].w * out[b].h - out[a].w * out[a].h);
+  for (const j of bumped) {
+    const spot = nearest(out[j], out, settled, p);
+    if (!spot) return null;
+    out[j] = { ...out[j], ...spot };
+    settled.push(j);
+  }
+  return out;
+}
+
+function freeSpot(p, w, h) {
+  for (const [ww, hh] of [[w, h], [1, 1]]) {
+    const spot = nearest({ x: 0, y: 0, w: ww, h: hh }, p.widgets, p.widgets.map((_, j) => j), p);
+    if (spot && ww <= p.columns && hh <= p.rows) return { ...spot, w: ww, h: hh };
+  }
+  return null;
+}
+
+function put(el, w, p) {
+  el.style.left = `${w.x / p.columns * 100}%`;
+  el.style.top = `${w.y / p.rows * 100}%`;
+  el.style.width = `${w.w / p.columns * 100}%`;
+  el.style.height = `${w.h / p.rows * 100}%`;
+}
+
+// what a tile says about itself, its type, a name and a hint of what's in it
+function tileHtml(w) {
+  const schema = schemaOf(w.type);
+  const c = w.config || {};
+  const title = c.title || c.name || entityName(c.entity) || c.entity || "";
+  let inner = "";
+  if (w.type === "entities") {
+    inner = `<div class="minis">${(c.entities || []).map((id) => `<span>${esc(entityName(id) || id)}</span>`).join("")}</div>`;
+  } else if (c.entity && title !== c.entity) {
+    inner = `<small>${esc(c.entity)}</small>`;
+  }
+  return `<div class="box"><span class="kind">${esc(schema ? schema.name : w.type)}</span>` +
+    `<strong>${esc(title)}</strong>${inner}<span class="size">${w.w} by ${w.h}</span><div class="handle"></div></div>`;
+}
+
 function drawGrid() {
   const p = current(), grid = $("grid");
-  grid.style.gridTemplateColumns = `repeat(${p.columns}, 1fr)`;
-  grid.style.gridTemplateRows = `repeat(${p.rows}, 1fr)`;
-  grid.innerHTML = "";
-  for (let y = 0; y < p.rows; y++) for (let x = 0; x < p.columns; x++) {
-    const c = document.createElement("div");
-    c.className = "cell";
-    c.style.gridArea = `${y + 1} / ${x + 1}`;
-    grid.appendChild(c);
-  }
+  grid.classList.toggle("compact", p.density === "compact");
+  grid.style.setProperty("--columns", p.columns);
+  grid.style.setProperty("--rows", p.rows);
+  grid.innerHTML = `<div class="cells"></div><div id="ghost" class="ghost" hidden></div>`;
+  grid.firstChild.innerHTML = "<i></i>".repeat(p.columns * p.rows);
   p.widgets.forEach((w, i) => {
-    const box = document.createElement("div");
-    box.className = "box" + (i === picked ? " picked" : "");
-    place(box, w);
-    const schema = schemas.find((s) => s.type === w.type);
-    const detail = w.config.title || w.config.name || w.config.entity || "";
-    box.innerHTML = `${schema ? schema.name : w.type}<small>${detail}</small><div class="handle"></div>`;
-    box.onpointerdown = (e) => drag(e, i, e.target.classList.contains("handle"));
-    grid.appendChild(box);
+    const slot = document.createElement("div");
+    slot.className = "slot" + (i === picked ? " picked" : "");
+    slot.dataset.i = i;
+    put(slot, w, p);
+    slot.innerHTML = tileHtml(w);
+    slot.onpointerdown = (e) => drag(e, i, e.target.classList.contains("handle"));
+    grid.appendChild(slot);
   });
 }
 
-function place(el, w) { el.style.gridArea = `${w.y + 1} / ${w.x + 1} / span ${w.h} / span ${w.w}`; }
-
-function fits(p, w, ignore) {
-  if (w.x < 0 || w.y < 0 || w.w < 1 || w.h < 1 || w.x + w.w > p.columns || w.y + w.h > p.rows) return false;
-  return !p.widgets.some((o, i) => i !== ignore && w.x < o.x + o.w && o.x < w.x + w.w && w.y < o.y + o.h && o.y < w.y + w.h);
-}
-
-// drag a box to move it, its corner to resize, a tap picks it for the settings form
+// drag a tile to move it, its corner to resize it, a tap picks it for the settings form. the
+// others show where they'd be pushed to while the drag goes on
 function drag(e, i, resizing) {
+  if (e.button !== 0) return;
   e.preventDefault();
-  const p = current(), start = { ...p.widgets[i] }, grid = $("grid").getBoundingClientRect();
-  const cellW = grid.width / p.columns, cellH = grid.height / p.rows;
-  const box = e.currentTarget, x0 = e.clientX, y0 = e.clientY;
-  let moved = false, next = start;
-  box.setPointerCapture(e.pointerId);
-  box.onpointermove = (m) => {
-    const dx = Math.round((m.clientX - x0) / cellW), dy = Math.round((m.clientY - y0) / cellH);
-    if (dx || dy) moved = true;
-    next = resizing ? { ...start, w: Math.max(1, start.w + dx), h: Math.max(1, start.h + dy) } : { ...start, x: start.x + dx, y: start.y + dy };
-    place(box, next);
-    box.classList.toggle("bad", !fits(p, next, i));
+  const p = current(), before = p.widgets.map((w) => ({ ...w })), start = before[i];
+  const box = $("grid").getBoundingClientRect(), cellW = box.width / p.columns, cellH = box.height / p.rows;
+  const slots = [...$("grid").querySelectorAll(".slot")], slot = slots[i], ghost = $("ghost");
+  const x0 = e.clientX, y0 = e.clientY;
+  let moved = false, result = null;
+  slot.setPointerCapture(e.pointerId);
+  slot.onpointermove = (m) => {
+    const px = m.clientX - x0, py = m.clientY - y0;
+    if (!moved && Math.abs(px) + Math.abs(py) < DRAG_SLOP) return;
+    if (!moved) { moved = true; slot.classList.add("dragging"); ghost.hidden = false; }
+    const dx = Math.round(px / cellW), dy = Math.round(py / cellH);
+    const next = resizing ? { ...start, w: Math.max(1, start.w + dx), h: Math.max(1, start.h + dy) } : { ...start, x: start.x + dx, y: start.y + dy };
+    result = arrange(before, i, next, p);
+    put(ghost, { x: Math.max(0, Math.min(next.x, p.columns - 1)), y: Math.max(0, Math.min(next.y, p.rows - 1)), w: next.w, h: next.h }, p);
+    ghost.classList.toggle("bad", !result);
+    (result || before).forEach((w, j) => { if (j !== i) put(slots[j], w, p); });
+    if (resizing) {
+      slot.style.width = `${start.w * cellW + px}px`;
+      slot.style.height = `${start.h * cellH + py}px`;
+    } else {
+      slot.style.transform = `translate(${px}px, ${py}px)`;
+    }
   };
-  box.onpointerup = () => {
-    box.onpointermove = box.onpointerup = null;
-    if (moved && fits(p, next, i)) p.widgets[i] = next;
+  slot.onpointerup = slot.onpointercancel = () => {
+    slot.onpointermove = slot.onpointerup = slot.onpointercancel = null;
+    if (moved && result) {
+      remember();
+      p.widgets = result;
+    }
+    if (moved && !result) say("message", "there's no room to move the others out of the way", true);
     if (!moved) picked = i;
     render();
   };
 }
 
+// arrow keys nudge the picked tile (shift grows and shrinks it), the same pushing as a drag
+function nudge(dx, dy, resizing) {
+  const p = current(), w = p.widgets[picked];
+  if (!w) return;
+  const next = resizing ? { ...w, w: w.w + dx, h: w.h + dy } : { ...w, x: w.x + dx, y: w.y + dy };
+  const result = arrange(p.widgets, picked, next, p);
+  if (!result) return;
+  remember();
+  p.widgets = result;
+  render();
+}
+
+document.addEventListener("keydown", (e) => {
+  if ($("tab-layout").hidden || !config || $("picker").open) return;
+  const typing = /^(input|textarea|select)$/i.test(e.target.tagName);
+  const mod = e.ctrlKey || e.metaKey;
+  if (mod && e.key.toLowerCase() === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
+  if (mod && e.key.toLowerCase() === "y") { e.preventDefault(); redo(); return; }
+  if (typing) return;
+  const arrows = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+  if (arrows[e.key] && picked >= 0) { e.preventDefault(); nudge(...arrows[e.key], e.shiftKey); }
+  if ((e.key === "Delete" || e.key === "Backspace") && picked >= 0) { e.preventDefault(); removePicked(); }
+  if (e.key === "Escape") { picked = -1; render(); }
+});
+
+function removePicked() {
+  remember();
+  current().widgets.splice(picked, 1);
+  picked = -1;
+  render();
+}
+
+// a page's grid. keep tile sizes scales every tile with the grid, so going from 4 by 3 to 8 by 6
+// keeps the layout and just gives it finer steps. anything that ends up overlapping moves aside
+function setGrid(columns, rows) {
+  const p = current();
+  if (!(columns >= 1 && rows >= 1)) return;
+  const keep = $("grid-keep").checked;
+  const fx = keep ? columns / p.columns : 1, fy = keep ? rows / p.rows : 1;
+  const target = { columns, rows };
+  const out = p.widgets.map((w) => {
+    const ww = Math.min(columns, Math.max(1, Math.round(w.w * fx))), hh = Math.min(rows, Math.max(1, Math.round(w.h * fy)));
+    return { ...w, w: ww, h: hh, x: Math.min(columns - ww, Math.round(w.x * fx)), y: Math.min(rows - hh, Math.round(w.y * fy)) };
+  });
+  const placed = [];
+  for (let j = 0; j < out.length; j++) {
+    if (placed.some((k) => overlaps(out[k], out[j]))) {
+      const spot = nearest(out[j], out, placed, target);
+      if (!spot) { say("message", "the tiles don't all fit on a grid that small", true); render(); return; }
+      out[j] = { ...out[j], ...spot };
+    }
+    placed.push(j);
+  }
+  remember();
+  p.columns = columns;
+  p.rows = rows;
+  p.widgets = out;
+  say("message", "", false);
+  render();
+}
+
+$("grid-columns").onchange = () => setGrid(Number($("grid-columns").value), current().rows);
+$("grid-rows").onchange = () => setGrid(current().columns, Number($("grid-rows").value));
+$("grid-density").onchange = () => {
+  remember();
+  // comfortable is the default, left out so older configs stay as they were
+  if ($("grid-density").value === "compact") current().density = "compact"; else delete current().density;
+  render();
+};
+$("undo").onclick = undo;
+$("redo").onclick = redo;
+
+// every widget type as a card, its shape, name and what it's for
+function openPicker() {
+  $("picker-search").value = "";
+  say("picker-message", "", false);
+  drawPicker();
+  $("picker").showModal();
+  $("picker-search").focus();
+}
+
+function drawPicker() {
+  const q = $("picker-search").value.trim().toLowerCase();
+  const list = schemas.filter((s) => !q || `${s.name} ${s.description || ""}`.toLowerCase().includes(q));
+  $("picker-list").innerHTML = list.map((s) => `<button type="button" class="card" data-type="${s.type}">` +
+    `<span class="shape" style="--w: ${s.w}; --h: ${s.h}">${"<i></i>".repeat(s.w * s.h)}</span>` +
+    `<strong>${esc(s.name)}</strong><small>${esc(s.description || "")}</small><span class="muted">${s.w} by ${s.h}</span></button>`).join("") ||
+    `<p class="muted">nothing matches</p>`;
+  $("picker-list").querySelectorAll(".card").forEach((c) => c.onclick = () => addWidget(c.dataset.type));
+}
+
+function addWidget(type) {
+  const schema = schemaOf(type), p = current();
+  const spot = freeSpot(p, schema.w, schema.h);
+  if (!spot) return say("picker-message", "no room on this page, move or shrink something first", true);
+  remember();
+  p.widgets.push({ ...spot, type, config: {} });
+  picked = p.widgets.length - 1;
+  $("picker").close();
+  render();
+}
+
+$("add").onclick = openPicker;
+$("picker-close").onclick = () => $("picker").close();
+$("picker-search").oninput = drawPicker;
+
 function drawSettings() {
   const form = $("settings"), w = current().widgets[picked];
+  delete form.dataset.remembered;
   if (!w) { form.innerHTML = `<p class="muted">pick a widget to change it</p>`; return; }
-  const schema = schemas.find((s) => s.type === w.type) || { name: w.type, fields: [] };
-  form.innerHTML = `<h2>${schema.name}</h2>` + schema.fields.map((f) => field(f, w.config)).join("") +
-    `<div class="bar"><button type="button" id="remove-widget">remove widget</button></div>`;
+  const schema = schemaOf(w.type) || { name: w.type, fields: [] };
+  form.innerHTML = `<h2>${esc(schema.name)}</h2>` + schema.fields.map((f) => field(f, w.config)).join("") +
+    `<div class="bar"><button type="button" id="copy-widget">duplicate</button><button type="button" id="remove-widget">remove widget</button></div>`;
+  // one undo step per visit to the form, not one per key
+  form.onfocusin = () => { if (!form.dataset.remembered) { remember(); form.dataset.remembered = "1"; } };
   form.oninput = form.onchange = () => {
     const out = {};
     for (const f of schema.fields) {
@@ -129,8 +346,17 @@ function drawSettings() {
     }
     w.config = out;
     drawGrid();
+    $("dirty").textContent = dirty() ? "unsaved changes" : "";
   };
-  $("remove-widget").onclick = () => { current().widgets.splice(picked, 1); picked = -1; render(); };
+  $("remove-widget").onclick = removePicked;
+  $("copy-widget").onclick = () => {
+    const p = current(), spot = freeSpot(p, w.w, w.h);
+    if (!spot) return say("message", "no room on this page for a copy", true);
+    remember();
+    p.widgets.push({ ...structuredClone(w), ...spot });
+    picked = p.widgets.length - 1;
+    render();
+  };
 }
 
 function field(f, values) {
@@ -140,9 +366,9 @@ function field(f, values) {
     if (!list.length) return `<label>${f.label}</label><p class="muted">none set up in sources.json</p>`;
     const chosen = values[f.key] || [];
     return `<label>${f.label}</label><div class="checks">` + list.map((s) =>
-      `<label><input type="checkbox" name="${f.key}" value="${s.id}" ${chosen.includes(s.id) ? "checked" : ""}>${s.name}</label>`).join("") + `</div>`;
+      `<label><input type="checkbox" name="${f.key}" value="${s.id}" ${chosen.includes(s.id) ? "checked" : ""}>${esc(s.name)}</label>`).join("") + `</div>`;
   }
-  const value = String(Array.isArray(v) ? v.join(", ") : v).replace(/"/g, "&quot;");
+  const value = esc(Array.isArray(v) ? v.join(", ") : v);
   const label = f.label + (f.required ? " (needed)" : "");
   if (f.kind === "toggle") return `<label class="toggle"><input type="checkbox" name="${f.key}" ${v === true ? "checked" : ""}>${label}</label>`;
   if (f.kind === "choice") return `<label>${label}<select name="${f.key}">` +
@@ -156,18 +382,43 @@ function field(f, values) {
   if (f.kind !== "entity" && f.kind !== "entities") return `<label>${label}<input name="${f.key}" value="${value}"></label>`;
   // suggestions only from the domains the field can use, the same filter as the hub's own picker
   const fit = entities.filter((e) => !f.domains || !f.domains.length || f.domains.includes(e.id.split(".")[0]));
-  const options = fit.map((e) => `<option value="${e.id}">${e.name}${e.area ? " · " + e.area : ""}</option>`).join("");
-  const hint = f.kind === "entities" ? ` placeholder="ids, comma between them"` : "";
-  return `<label>${label}<input name="${f.key}" list="entities-${f.key}" value="${value}"${hint}><datalist id="entities-${f.key}">${options}</datalist></label>`;
+  const options = fit.map((e) => `<option value="${e.id}">${esc(e.name)}${e.area ? " · " + esc(e.area) : ""}</option>`).join("");
+  if (f.kind === "entity") return `<label>${label}<input name="${f.key}" list="entities-${f.key}" value="${value}"><datalist id="entities-${f.key}">${options}</datalist></label>`;
+  // a chip per entity, the list itself rides in a hidden input so reading the form stays the same
+  const list = Array.isArray(v) ? v : [];
+  return `<label>${label}</label><div class="chips"><input type="hidden" name="${f.key}" value="${esc(JSON.stringify(list))}">` +
+    `<span class="chip-list">${chips(list)}</span>` +
+    `<input class="chip-add" list="entities-${f.key}" placeholder="add an entity"><datalist id="entities-${f.key}">${options}</datalist></div>`;
 }
+
+const chips = (list) => list.map((id) => `<span class="chip">${esc(entityName(id) || id)}<button type="button" data-remove="${esc(id)}">×</button></span>`).join("");
+
+// chip lists in any form, picking from the suggestions adds one, the cross takes one off
+function editChips(box, change) {
+  const hidden = box.querySelector("input[type=hidden]");
+  const list = change(JSON.parse(hidden.value));
+  hidden.value = JSON.stringify(list);
+  box.querySelector(".chip-list").innerHTML = chips(list);
+  box.closest("form").dispatchEvent(new Event("input"));
+}
+document.addEventListener("click", (e) => {
+  const remove = e.target.closest("[data-remove]");
+  if (remove) editChips(remove.closest(".chips"), (list) => list.filter((id) => id !== remove.dataset.remove));
+});
+document.addEventListener("change", (e) => {
+  if (!e.target.classList.contains("chip-add")) return;
+  const id = e.target.value.trim();
+  e.target.value = "";
+  if (id.includes(".")) editChips(e.target.closest(".chips"), (list) => list.includes(id) ? list : [...list, id]);
+});
 
 // what a field's control holds now, undefined when it's blank
 function readField(form, f) {
   if (f.kind === "calendars" || f.kind === "feeds") return [...form.querySelectorAll(`[name="${f.key}"]:checked`)].map((c) => c.value);
   const el = form.querySelector(`[name="${f.key}"]`);
   if (f.kind === "toggle") return el.checked;
+  if (f.kind === "entities") return JSON.parse(el.value || "[]");
   const v = el.value.trim();
-  if (f.kind === "entities") return v.split(",").map((s) => s.trim()).filter(Boolean);
   if (!v) return undefined;
   return f.kind === "number" ? Number(v) : v;
 }
@@ -282,20 +533,6 @@ $("settings-cancel").onclick = () => {
   drawSettingsFields();
 };
 
-function freeSpot(p, w, h) {
-  for (const [ww, hh] of [[w, h], [1, 1]]) for (let y = 0; y < p.rows; y++) for (let x = 0; x < p.columns; x++)
-    if (fits(p, { x, y, w: ww, h: hh }, -1)) return { x, y, w: ww, h: hh };
-  return null;
-}
-
-$("add").onclick = () => {
-  const schema = schemas.find((s) => s.type === $("add-type").value), p = current();
-  const spot = freeSpot(p, schema.w, schema.h);
-  if (!spot) return say("message", "no room on this page, move or shrink something first", true);
-  p.widgets.push({ ...spot, type: schema.type, config: {} });
-  picked = p.widgets.length - 1;
-  render();
-};
 
 const uniqueId = (taken, base) => { let n = 1, id = base; while (taken.includes(id)) id = base + ++n; return id; };
 
@@ -304,6 +541,7 @@ $("dash-new").onclick = () => {
   const name = prompt("name for the new dashboard");
   if (!name) return;
   const like = current();
+  remember();
   config.dashboards.push({ id: uniqueId(config.dashboards.map((d) => d.id), name.toLowerCase().replace(/[^a-z0-9]+/g, "-")), name,
     theme: board().theme, pages: [{ id: "main", columns: like.columns, rows: like.rows, widgets: [] }] });
   dash = config.dashboards.length - 1; page = 0; picked = -1; render();
@@ -312,29 +550,35 @@ $("dash-copy").onclick = () => {
   const copy = JSON.parse(JSON.stringify(board()));
   copy.id = uniqueId(config.dashboards.map((d) => d.id), copy.id + "-copy");
   copy.name = copy.name + " copy";
+  remember();
   config.dashboards.push(copy);
   dash = config.dashboards.length - 1; render();
 };
 $("dash-delete").onclick = () => {
   if (!confirm(`delete ${board().name}?`)) return;
+  remember();
   const gone = config.dashboards.splice(dash, 1)[0];
   if (gone.id === config.activeDashboard) config.activeDashboard = config.dashboards[0].id;
   dash = 0; page = 0; picked = -1; render();
 };
-$("dash-active").onclick = () => { config.activeDashboard = board().id; render(); };
+$("dash-active").onclick = () => { remember(); config.activeDashboard = board().id; render(); };
 $("page-prev").onclick = () => { page--; picked = -1; render(); };
 $("page-next").onclick = () => { page++; picked = -1; render(); };
 $("page-add").onclick = () => {
   const like = current(), pages = board().pages;
-  pages.push({ id: uniqueId(pages.map((p) => p.id), "page" + (pages.length + 1)), columns: like.columns, rows: like.rows, widgets: [] });
+  remember();
+  const added = { id: uniqueId(pages.map((p) => p.id), "page" + (pages.length + 1)), columns: like.columns, rows: like.rows, widgets: [] };
+  if (like.density) added.density = like.density;
+  pages.push(added);
   page = pages.length - 1; picked = -1; render();
 };
-$("page-remove").onclick = () => { board().pages.splice(page, 1); picked = -1; render(); };
+$("page-remove").onclick = () => { remember(); board().pages.splice(page, 1); picked = -1; render(); };
 
 async function save(text, messageId) {
   try {
     await api("/api/config", { method: "PUT", body: text });
     config = JSON.parse(text);
+    savedText = JSON.stringify(config);
     say(messageId, "saved, the hub has it", false);
     render();
     setTimeout(refreshPreview, 1500);

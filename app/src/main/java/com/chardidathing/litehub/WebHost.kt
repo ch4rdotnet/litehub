@@ -161,7 +161,11 @@ class WebHost(private val app: LitehubApp) : HubAccess {
             append("  --background: ${hex(c.background)};\n  --surface: ${hex(c.surface)};\n")
             append("  --primary: ${hex(c.primary)};\n  --on-primary: ${hex(c.onPrimary)};\n")
             append("  --on-surface: ${hex(c.onSurface)};\n  --on-background: ${hex(c.onBackground)};\n  --error: ${hex(c.error)};\n")
-            append("  --radius: ${t.radii.medium}px;\n  --touch: ${t.touchTarget}px;\n")
+            append("  --radius: ${t.radii.medium}px;\n  --radius-small: ${t.radii.small}px;\n  --touch: ${t.touchTarget}px;\n")
+            // tiles the editor pushes aside glide there over the theme's own slide time
+            append("  --slide: ${if (t.motion.animations) t.motion.slideMs else 0}ms;\n")
+            val scrim = Presets.SCRIM
+            append("  --scrim: rgb(${scrim shr 16 and BYTE} ${scrim shr 8 and BYTE} ${scrim and BYTE} / ${(scrim ushr 24) * PERCENT / BYTE}%);\n")
             append("  --space-xs: ${t.spacing.xs}px;\n  --space-s: ${t.spacing.s}px;\n  --space-m: ${t.spacing.m}px;\n")
             append("  --space-l: ${t.spacing.l}px;\n  --space-xl: ${t.spacing.xl}px;\n")
             append("  --h5: ${t.type.h5.size}px;\n  --h6: ${t.type.h6.size}px;\n  --body1: ${t.type.body1.size}px;\n  --body2: ${t.type.body2.size}px;\n")
@@ -189,5 +193,7 @@ class WebHost(private val app: LitehubApp) : HubAccess {
         const val PREVIEW_SCALE = 2
         const val PREVIEW_WAIT_MS = 2_000L
         const val PNG_QUALITY = 100
+        const val BYTE = 0xFF
+        const val PERCENT = 100
     }
 }

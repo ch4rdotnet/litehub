@@ -32,23 +32,31 @@
       <button id="dash-copy">duplicate</button>
       <button id="dash-delete">delete</button>
       <button id="dash-active">show this one on the hub</button>
-      <span class="grow"></span>
-      <span id="page-label"></span>
+    </div>
+    <div class="bar">
       <button id="page-prev">prev</button>
+      <span id="page-label"></span>
       <button id="page-next">next</button>
       <button id="page-add">add page</button>
       <button id="page-remove">remove page</button>
+      <span class="grow"></span>
+      <label>grid <input id="grid-columns" class="tiny" type="number" min="1" max="24"> by <input id="grid-rows" class="tiny" type="number" min="1" max="24"></label>
+      <label class="toggle"><input id="grid-keep" type="checkbox" checked>keep tile sizes</label>
+      <select id="grid-density"><option value="comfortable">comfortable</option><option value="compact">compact</option></select>
     </div>
     <div class="split">
       <div>
         <div id="grid" class="grid"></div>
         <div class="bar">
-          <select id="add-type"></select>
-          <button id="add">add widget</button>
+          <button id="add" class="primary">add widget</button>
+          <button id="undo">undo</button>
+          <button id="redo">redo</button>
           <span class="grow"></span>
+          <span id="dirty" class="muted"></span>
           <button id="save" class="primary">save to hub</button>
         </div>
         <p id="message"></p>
+        <p class="muted hint">drag a tile to move it, its corner to resize it, tiles in the way move aside. arrow keys nudge the picked tile (shift resizes), delete removes it, ctrl z undoes</p>
       </div>
       <aside>
         <form id="settings"><p class="muted">pick a widget to change it</p></form>
@@ -82,6 +90,17 @@
     </div>
   </section>
 </main>
+
+<dialog id="picker">
+  <div class="bar">
+    <h2>add a widget</h2>
+    <span class="grow"></span>
+    <input id="picker-search" placeholder="search" autocomplete="off">
+    <button id="picker-close">close</button>
+  </div>
+  <div id="picker-list" class="picker-list"></div>
+  <p id="picker-message"></p>
+</dialog>
 <script src="/app.js"></script>
 </body>
 </html>
