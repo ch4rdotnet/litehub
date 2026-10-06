@@ -42,6 +42,19 @@ class TextBlock(private val maxLines: Int = Int.MAX_VALUE) {
             .build()
     }
 
+    // single line height for a style, without laying anything out
+    fun lineHeight(style: ResolvedTheme.Text): Float {
+        paint.textSize = style.size
+        paint.typeface = style.typeface
+        return paint.fontMetrics.let { it.descent - it.ascent }
+    }
+
+    fun width(text: CharSequence, style: ResolvedTheme.Text): Float {
+        paint.textSize = style.size
+        paint.typeface = style.typeface
+        return Layout.getDesiredWidth(text, paint)
+    }
+
     fun draw(canvas: Canvas, x: Float, y: Float) {
         val l = layout ?: return
         canvas.save()
