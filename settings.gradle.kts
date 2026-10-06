@@ -25,4 +25,5 @@ dependencyResolutionManagement {
 rootProject.name = "litehub"
 include(":app")
 include(":core:model")
+include(":ui:tokens")
  
