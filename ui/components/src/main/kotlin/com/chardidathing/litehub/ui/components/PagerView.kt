@@ -1,5 +1,8 @@
 package com.chardidathing.litehub.ui.components
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -8,11 +11,11 @@ import android.view.VelocityTracker
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
-import android.view.animation.DecelerateInterpolator
-import android.widget.OverScroller
+import com.chardidathing.litehub.ui.tokens.Easing
 import com.chardidathing.litehub.ui.tokens.ResolvedTheme
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlin.math.sign
 
 // pages side by side, swiped horizontally. a swipe only moves the scroll offset, so pages
 // replay their recorded drawing instead of redrawing. dots in the bottom gutter when there's
@@ -27,7 +30,7 @@ class PagerView(context: Context, private val theme: ResolvedTheme, pages: List<
         private set
 
     private val config = ViewConfiguration.get(context)
-    private val scroller = OverScroller(context, DecelerateInterpolator())
+    private var settling: ValueAnimator? = null
     private var velocity: VelocityTracker? = null
     private var downX = 0f
     private var downY = 0f
@@ -81,8 +84,9 @@ class PagerView(context: Context, private val theme: ResolvedTheme, pages: List<
                 downY = ev.y
                 lastX = ev.x
                 // catching a page mid settle takes the drag over straight away
-                dragging = !scroller.isFinished
-                scroller.abortAnimation()
+                dragging = settling != null
+                settling?.cancel()
+                settling = null
             }
             MotionEvent.ACTION_MOVE -> {
                 val dx = abs(ev.x - downX)
@@ -110,7 +114,7 @@ class PagerView(context: Context, private val theme: ResolvedTheme, pages: List<
                     v > config.scaledMinimumFlingVelocity -> current - 1
                     else -> (scrollX.toFloat() / width).roundToInt()
                 }
-                settle(target.coerceIn(0, childCount - 1))
+                settle(target.coerceIn(0, childCount - 1), v)
             }
         }
     }
@@ -119,23 +123,42 @@ class PagerView(context: Context, private val theme: ResolvedTheme, pages: List<
         (velocity ?: VelocityTracker.obtain().also { velocity = it }).addMovement(ev)
     }
 
-    private fun settle(target: Int) {
+    // velocity is the finger's at release in px/s, negative moving left
+    private fun settle(target: Int, velocity: Float) {
         current = target
-        val dx = target * width - scrollX
+        val from = scrollX
+        val dx = target * width - from
         if (theme.pageSettleMs == 0 || dx == 0) {
             scrollTo(target * width, 0)
             settled()
-        } else {
-            scroller.startScroll(scrollX, 0, dx, 0, theme.pageSettleMs)
-            postInvalidateOnAnimation()
+            return
         }
-    }
+        // a finger still heading for the target hands its speed on, one that stopped or turned
+        // back starts the settle from rest
+        val speed = if (sign(-velocity) == sign(dx.toFloat())) abs(velocity) / 1000f else 0f
+        val ms = if (speed > 0f) {
+            (Easing.MAX_START_SLOPE * abs(dx) / speed).toLong().coerceAtMost(theme.pageSettleMs.toLong())
+        } else {
+            theme.pageSettleMs.toLong()
+        }
+        settling = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = ms
+            interpolator = Easing.settle(speed * ms / abs(dx))
+            addUpdateListener { scrollTo(from + (dx * it.animatedFraction).roundToInt(), 0) }
+            addListener(object : AnimatorListenerAdapter() {
+                private var cancelled = false
 
-    override fun computeScroll() {
-        if (scroller.computeScrollOffset()) {
-            scrollTo(scroller.currX, 0)
-            postInvalidateOnAnimation()
-            if (scroller.isFinished) settled()
+                override fun onAnimationCancel(animation: Animator) {
+                    cancelled = true
+                }
+
+                override fun onAnimationEnd(animation: Animator) {
+                    if (cancelled) return
+                    settling = null
+                    settled()
+                }
+            })
+            start()
         }
     }
 

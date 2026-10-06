@@ -19,7 +19,8 @@ object Presets {
     // md2 says 24, a wall panel is read from further away
     private val iconSize = 32f
 
-    private val motion = Motion(animations = true, pageSettleMs = 250)
+    // the longest a page settle may take, a full 1920px page from rest
+    private val motion = Motion(animations = true, pageSettleMs = 300)
 
     // md2 palette, 500s on light and 200s on dark so they read against either surface
     private val paletteLight = listOf(
