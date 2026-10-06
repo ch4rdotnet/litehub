@@ -90,8 +90,9 @@ class FakeHa(private val token: String) : AutoCloseable {
                 }
                 "unsubscribe_events" -> webSocket.send(result(id!!, success = true))
                 "mobile_app/push_notification_channel" -> {
-                    webSocket.send(result(id!!, success = true))
-                    pushSubscription = id
+                    val known = msg["webhook_id"]?.jsonPrimitive?.contentOrNull != "deleted"
+                    webSocket.send(result(id!!, success = known))
+                    if (known) pushSubscription = id
                 }
                 "call_service" -> {
                     val response = serviceResponse.takeIf { msg["return_response"]?.jsonPrimitive?.content == "true" }

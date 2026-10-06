@@ -63,6 +63,10 @@ class HaClient(
 
         // a notify.mobile_app_* message for this device, see setPushChannel
         fun onPush(message: JsonObject) = Unit
+
+        // ha turned the push channel down, its webhook is gone (the device was deleted there).
+        // the only reliable sign, ha answers unknown webhooks with a 200 on purpose
+        fun onPushRejected() = Unit
     }
 
     private class AuthRejected(message: String) : IOException(message)
@@ -252,7 +256,14 @@ class HaClient(
                 listener.onEntities(EntityEvent(sub.requested, sub.initial, body))
                 sub.initial = false
             }
-            "result" -> pending.remove(id)?.complete(message)
+            "result" -> {
+                if (id == pushSubscription && (message["success"] as? JsonPrimitive)?.booleanOrNull == false) {
+                    pushSubscription = null
+                    listener.onPushRejected()
+                    return
+                }
+                pending.remove(id)?.complete(message)
+            }
         }
     }
 

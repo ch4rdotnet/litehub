@@ -30,6 +30,7 @@ class HaClientTest {
     private val events = LinkedBlockingQueue<HaClient.EntityEvent>()
     private val entities = HashMap<String, Entity>()
     private val pushes = LinkedBlockingQueue<kotlinx.serialization.json.JsonObject>()
+    private val rejections = LinkedBlockingQueue<Unit>()
 
     private val listener = object : HaClient.Listener {
         override fun onStatus(status: HaClient.Status) {
@@ -43,6 +44,10 @@ class HaClientTest {
 
         override fun onPush(message: kotlinx.serialization.json.JsonObject) {
             pushes += message
+        }
+
+        override fun onPushRejected() {
+            rejections += Unit
         }
     }
 
@@ -169,6 +174,15 @@ class HaClientTest {
         generateSequence { ha.received.poll(5, TimeUnit.SECONDS) }.first { it.type() == "mobile_app/push_notification_channel" }
         ha.push("hello")
         assertEquals("hello", pushes.poll(5, TimeUnit.SECONDS)!!["message"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `a deleted device shows up as a rejected push channel`() {
+        ha.accept()
+        val client = client()
+        runBlocking(confined) { client.setPushChannel("deleted") }
+        client.start()
+        assertEquals(Unit, rejections.poll(5, TimeUnit.SECONDS))
     }
 
     private inline fun <reified T : HaClient.Status> awaitStatus(): T {

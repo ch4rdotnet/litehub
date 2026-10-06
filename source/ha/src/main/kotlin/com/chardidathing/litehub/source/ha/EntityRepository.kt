@@ -32,6 +32,20 @@ class EntityRepository(
     private val scope = CoroutineScope(SupervisorJob() + confined)
 
     private val client = credentials.getOrNull()?.let { HaClient(it, http, scope, timing, Events()) }
+
+    // the rest side of mobile_app, null without working credentials
+    val mobileApp: MobileApp? = credentials.getOrNull()?.let { MobileApp(it, http) }
+
+    private var onPush: ((JsonObject) -> Unit)? = null
+    private var onPushRejected: (() -> Unit)? = null
+
+    // notifications for this hub's mobile_app device, null webhook stops them. rejected means
+    // ha no longer knows the device
+    fun setPushChannel(webhookId: String?, rejected: () -> Unit = {}, handler: (JsonObject) -> Unit) {
+        onPush = handler
+        onPushRejected = rejected
+        scope.launch { client?.setPushChannel(webhookId) }
+    }
     private var status: HaClient.Status = when (client) {
         null -> HaClient.Status.Failed(credentials.exceptionOrNull()?.message ?: "home assistant isn't set up")
         else -> HaClient.Status.Connecting
@@ -141,6 +155,14 @@ class EntityRepository(
     }
 
     private inner class Events : HaClient.Listener {
+        override fun onPush(message: JsonObject) {
+            onPush?.invoke(message)
+        }
+
+        override fun onPushRejected() {
+            onPushRejected?.invoke()
+        }
+
         override fun onStatus(status: HaClient.Status) {
             this@EntityRepository.status = status
             if (status !is HaClient.Status.Connected) fresh.clear()
