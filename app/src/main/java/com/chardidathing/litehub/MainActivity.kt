@@ -4,6 +4,13 @@ import android.app.Activity
 import android.content.res.Configuration
 import android.graphics.drawable.ColorDrawable
 import android.content.Intent
+import android.speech.tts.TextToSpeech
+import android.view.MotionEvent
+import android.view.View
+import android.view.WindowManager
+import com.chardidathing.litehub.core.config.ConfigCodec
+import com.chardidathing.litehub.ui.components.NoticeView
+import java.io.File
 import android.os.Bundle
 import android.widget.FrameLayout
 import android.view.ViewTreeObserver
@@ -23,6 +30,12 @@ import kotlinx.coroutines.withContext
 
 class MainActivity : Activity() {
 
+    private companion object {
+        const val MAX_LEVEL = 255f
+        // a notification banner stays this long unless it's tapped away
+        const val NOTICE_MS = 15_000L
+    }
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val app get() = application as LitehubApp
     private val loader by lazy { DashboardLoader(app) }
@@ -33,6 +46,11 @@ class MainActivity : Activity() {
     private lateinit var root: FrameLayout
     private lateinit var admin: AdminFlow
     private lateinit var editor: EditorFlow
+    private lateinit var companion: CompanionBridge
+    private var screenOff: View? = null
+    private var notice: View? = null
+    private var tts: TextToSpeech? = null
+    private val hideNotice = Runnable { notice?.let(root::removeView); notice = null }
     private var ready: Screen.Ready? = null
     private var theme: ResolvedTheme? = null
     private var started = false
@@ -47,7 +65,8 @@ class MainActivity : Activity() {
         // after setContentView, the insets controller needs the decor view to exist
         Kiosk.immerse(window)
         editor = EditorFlow(this, app, root, scope, onSaved = ::load)
-        admin = AdminFlow(this, app, root, scope, onReload = ::reload, onEdit = ::edit, onRestore = ::restorePrevious)
+        companion = CompanionBridge(app, scope, Commands())
+        admin = AdminFlow(this, app, root, scope, onReload = ::reload, onEdit = ::edit, onRestore = ::restorePrevious, companion = companion)
         load()
     }
 
@@ -76,6 +95,7 @@ class MainActivity : Activity() {
         super.onStart()
         started = true
         ticker.start()
+        if (firstFrameDone) companion.start()
         if (firstFrameDone) startSources()
         pager?.let { binder?.show(it.current) }
     }
@@ -84,6 +104,7 @@ class MainActivity : Activity() {
         started = false
         binder?.stop()
         ticker.stop()
+        companion.stop()
         app.calendars.stop()
         app.feeds.stop()
         super.onStop()
@@ -94,9 +115,95 @@ class MainActivity : Activity() {
         load()
     }
 
+    // every touch counts as someone being there, and wakes a screen ha turned off
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (ev.actionMasked == MotionEvent.ACTION_DOWN) {
+            companion.interacted()
+            if (screenOff != null) {
+                setScreen(true)
+                return true
+            }
+        }
+        return super.dispatchTouchEvent(ev)
+    }
+
     override fun onDestroy() {
+        tts?.shutdown()
         scope.cancel()
         super.onDestroy()
+    }
+
+    // what ha can ask of the screen through notify.mobile_app_litehub
+    private inner class Commands : CompanionBridge.Commands {
+        override fun screen(on: Boolean) = setScreen(on)
+
+        override fun brightness(level: Int) {
+            // 0 would be the same as off, ha's companion app treats it as the dimmest
+            window.attributes = window.attributes.apply { screenBrightness = level.coerceAtLeast(1) / MAX_LEVEL }
+            companion.update { it.copy(brightness = level) }
+        }
+
+        override fun dashboard(id: String) = switchDashboard(id)
+
+        override fun page(number: Int) {
+            pager?.jumpTo(number - 1)
+        }
+
+        override fun reload() = this@MainActivity.reload()
+
+        override fun speak(text: String) {
+            val engine = tts
+            if (engine != null) {
+                engine.speak(text, TextToSpeech.QUEUE_ADD, null, text.hashCode().toString())
+                return
+            }
+            // the engine starts asynchronously, the first message waits for it
+            tts = TextToSpeech(app) { status ->
+                if (status == TextToSpeech.SUCCESS) tts?.speak(text, TextToSpeech.QUEUE_ADD, null, text.hashCode().toString())
+                else showNotice("couldn't speak", "this device has no text to speech engine")
+            }
+        }
+
+        override fun notify(title: String?, message: String) = showNotice(title, message)
+    }
+
+    private fun setScreen(on: Boolean) {
+        val theme = this.theme ?: return
+        if (on) {
+            screenOff?.let(root::removeView)
+            screenOff = null
+            window.attributes = window.attributes.apply { screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE }
+        } else if (screenOff == null) {
+            // no device admin, so the panel stays powered. black and the lowest backlight is as off as it gets
+            screenOff = View(this).apply { setBackgroundColor(theme.screenOff) }.also(root::addView)
+            window.attributes = window.attributes.apply { screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_OFF }
+        }
+        companion.update { it.copy(screenOn = on) }
+    }
+
+    private fun showNotice(title: String?, message: String) {
+        val theme = this.theme ?: return
+        notice?.let(root::removeView)
+        root.removeCallbacks(hideNotice)
+        val view = NoticeView(this, theme, title, message) { hideNotice.run() }
+        notice = view
+        root.addView(view, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
+        root.postDelayed(hideNotice, NOTICE_MS)
+    }
+
+    // ha asked for another dashboard, it sticks like a choice made on the device would
+    private fun switchDashboard(id: String) {
+        val screen = ready ?: return
+        if (screen.config.dashboards.none { it.id == id }) {
+            showNotice("no such dashboard", "home assistant asked for \"$id\", this hub doesn't have it")
+            return
+        }
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                File(app.filesDir, LitehubApp.CONFIG_FILE).writeAtomic(ConfigCodec.encode(screen.config.copy(activeDashboard = id)))
+            }
+            load()
+        }
     }
 
     private fun startSources() {
@@ -174,7 +281,10 @@ class MainActivity : Activity() {
                 PagerView(this, theme, pages).also {
                     pager = it
                     it.onLongPress = { admin.open(theme) }
-                    it.onSettled = { page -> if (started) b.show(page) }
+                    it.onSettled = { page ->
+                        if (started) b.show(page)
+                        companion.update { c -> c.copy(page = page + 1) }
+                    }
                     if (started) b.show(it.current)
                 }
             }
@@ -188,6 +298,9 @@ class MainActivity : Activity() {
         }
         root.removeAllViews()
         root.addView(view)
+        screenOff = null
+        notice = null
+        ready?.let { r -> companion.update { it.copy(dashboard = r.config.activeDashboard, page = (pager?.current ?: 0) + 1) } }
         if (firstFrameDone) {
             // a reload built new repositories, they need starting like the first ones were
             app.ha.connect()
@@ -202,7 +315,10 @@ class MainActivity : Activity() {
                         reportFullyDrawn()
                         firstFrameDone = true
                         app.ha.connect()
-                        if (started) startSources()
+                        if (started) {
+                            startSources()
+                            companion.start()
+                        }
                     }
                     return true
                 }

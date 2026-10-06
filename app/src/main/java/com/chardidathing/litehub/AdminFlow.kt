@@ -26,6 +26,7 @@ class AdminFlow(
     private val onReload: () -> Unit,
     private val onEdit: () -> Unit,
     private val onRestore: () -> Unit,
+    private val companion: CompanionBridge,
 ) {
 
     private var overlay: View? = null
@@ -72,6 +73,8 @@ class AdminFlow(
             if (canEdit) add("edit layout" to { close(); onEdit() })
             if (previous) add("restore previous layout" to { close(); onRestore() })
             add("reload" to onReload)
+            if (companion.registration == null) add("add to home assistant" to ::register)
+            else add("unregister" to ::forget)
             add((if (hasPin) "change pin" else "set pin") to ::newPin)
             if (hasPin) add("remove pin" to ::removePin)
             add("home app settings" to { settings(Settings.ACTION_HOME_SETTINGS) })
@@ -108,6 +111,26 @@ class AdminFlow(
         }, onCancel = ::menu)
         pad.say("at least ${Pin.MIN_LENGTH} digits", error = false)
         show(pad)
+    }
+
+    private fun register() {
+        val t = theme ?: return
+        show(MenuView(activity, t, "registering", "adding this hub to home assistant as a device", emptyList()) {})
+        scope.launch {
+            val result = companion.register()
+            val (title, detail) = result.fold(
+                { "registered" to "home assistant now has this hub as a device. ${companion.notifyService} sends to this screen" },
+                { "couldn't register" to (it.message ?: "home assistant refused") },
+            )
+            show(MenuView(activity, t, title, detail, listOf("ok")) { menu() })
+        }
+    }
+
+    private fun forget() {
+        scope.launch {
+            companion.forget()
+            menu()
+        }
     }
 
     private fun removePin() {
