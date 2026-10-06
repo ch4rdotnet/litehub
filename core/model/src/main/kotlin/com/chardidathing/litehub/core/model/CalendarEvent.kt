@@ -15,3 +15,7 @@ data class CalendarEvent(
     val startMs: Long,
     val endMs: Long,
 )
+
+// every event from every calendar source, sorted by start, with how each source's last
+// refresh went
+data class CalendarSnapshot(val events: List<CalendarEvent>, val status: Map<String, SourceStatus>)

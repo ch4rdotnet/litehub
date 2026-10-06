@@ -19,6 +19,8 @@ android {
 
 dependencies {
     api(project(":core:model"))
+    api(project(":source:fetch"))
+    api(project(":source:ha"))
     api(libs.kotlinx.coroutines.android)
     api(libs.okhttp)
     implementation(libs.lib.recur)
