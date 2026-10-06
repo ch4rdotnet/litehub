@@ -100,7 +100,7 @@ class AdminFlow(
         val t = theme ?: return
         scope.launch {
             val before = withContext(Dispatchers.IO) { app.hubSettings() }
-            val s = SettingsScreen(activity, t, SettingsForm.sections, SettingsForm.values(before), listOf(device()), object : SettingsScreen.Host {
+            val s = SettingsScreen(activity, t, SettingsForm.sections, SettingsForm.values(before), listOf(device(), log()), object : SettingsScreen.Host {
                 override fun pickEntity(domains: List<String>, onPicked: (String) -> Unit) = pick(t, domains, onPicked)
                 override fun newItem(section: String) = SettingsForm.newItem(section)
                 override fun action(id: String, done: (Result<JsonObject>) -> Unit) {
@@ -141,17 +141,33 @@ class AdminFlow(
         show(s, SETTINGS_IDLE_MS)
     }
 
-    // things about this device that aren't settings.json values
-    private fun device() = SettingsScreen.ActionSection("this device") {
-        val hasPin = app.settings.pin != null
-        buildList {
-            add((if (hasPin) "change pin" else "set pin") to ::newPin)
-            if (hasPin) add("remove pin" to ::removePin)
-            add((if (ScreenAdmin.active(app)) "real screen off: on" else "real screen off: off") to ::screenAdmin)
-            add("home app settings" to { openAndroid(Settings.ACTION_HOME_SETTINGS) })
-            add("android settings" to { openAndroid(Settings.ACTION_SETTINGS) })
-        }
-    }
+    // things about this device that aren't settings.json values, then everything the status
+    // page says and what the hardware is
+    private fun device() = SettingsScreen.ActionSection(
+        "this device",
+        items = {
+            val hasPin = app.settings.pin != null
+            buildList {
+                add((if (hasPin) "change pin" else "set pin") to ::newPin)
+                if (hasPin) add("remove pin" to ::removePin)
+                add((if (ScreenAdmin.active(app)) "real screen off: on" else "real screen off: off") to ::screenAdmin)
+                add("home app settings" to { openAndroid(Settings.ACTION_HOME_SETTINGS) })
+                add("android settings" to { openAndroid(Settings.ACTION_SETTINGS) })
+            }
+        },
+        info = { done ->
+            scope.launch {
+                val snapshot = withContext(Dispatchers.IO) { app.status.snapshot() }
+                done(app.status.rows(snapshot))
+            }
+        },
+    )
+
+    // newest first, the time beside each line
+    private fun log() = SettingsScreen.ActionSection(
+        "log",
+        info = { done -> done(AppLog.recent().asReversed().map { SettingsScreen.InfoRow(it.substringBefore(' '), it.substringAfter(' ')) }) },
+    )
 
     private fun pick(theme: ResolvedTheme, domains: List<String>, onPicked: (String) -> Unit) {
         hideKeyboard()

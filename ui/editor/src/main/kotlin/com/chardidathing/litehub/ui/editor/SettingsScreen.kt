@@ -18,7 +18,8 @@ import kotlinx.serialization.json.contentOrNull
 
 // the hub's own settings. sections down the left, the picked one on the right, one set of edits
 // across all of them until save or cancel. a list section (calendars) shows its items, each
-// edited on its own page. action sections hold buttons instead of fields (the pin, android's settings)
+// edited on its own page. action sections come first and hold buttons and read only rows
+// instead of fields (the pin, the hub's status, the log)
 @SuppressLint("ViewConstructor")
 class SettingsScreen(
     context: Context,
@@ -29,8 +30,16 @@ class SettingsScreen(
     private val host: Host,
 ) : LinearLayout(context) {
 
-    // items is label to action, asked for again whenever the section is shown
-    class ActionSection(val name: String, val items: () -> List<Pair<String, () -> Unit>>)
+    // items is label to action, asked for again whenever the section is shown. info hands back
+    // rows to show under them, whenever it has them
+    class ActionSection(
+        val name: String,
+        val items: () -> List<Pair<String, () -> Unit>> = { emptyList() },
+        val info: ((List<InfoRow>) -> Unit) -> Unit = { },
+    )
+
+    // a heading when there's no value. bad shows in the error colour (a feed that's failing)
+    class InfoRow(val label: String, val value: String? = null, val bad: Boolean = false)
 
     interface Host {
         fun pickEntity(domains: List<String>, onPicked: (String) -> Unit)
@@ -48,6 +57,8 @@ class SettingsScreen(
     private val problem = TextView(context).styled(theme.type.body2, theme.colors.error)
     private val bar = LinearLayout(context).apply { orientation = HORIZONTAL }
     private var picked = 0
+    // bumped on every pane change, info that turns up for a pane that's gone is dropped
+    private var shown = 0
 
     init {
         orientation = HORIZONTAL
@@ -56,7 +67,7 @@ class SettingsScreen(
         val gap = theme.spacing.s.toInt()
         setPadding(side, side, side, side)
 
-        val names = sections.map { it.name } + actions.map { it.name }
+        val names = actions.map { it.name } + sections.map { it.name }
         val left = LinearLayout(context).apply { orientation = VERTICAL }
         left.addView(TextView(context).styled(theme.type.h5, theme.colors.onBackground).apply { text = "settings" })
         left.addView(space(theme.spacing.m.toInt()))
@@ -91,14 +102,15 @@ class SettingsScreen(
 
     private fun show(index: Int) {
         picked = index
+        shown++
         bar.visibility = VISIBLE
         tabs.forEachIndexed { i, t -> t.checked = i == index }
         pane.removeAllViews()
-        val section = sections.getOrNull(index)
-        if (section == null) {
-            showActions(actions[index - sections.size])
+        if (index < actions.size) {
+            showActions(actions[index])
             return
         }
+        val section = sections[index - actions.size]
         heading(section.name)
         if (section.fields.isNotEmpty()) pane.addView(FieldForm(context, theme, section.fields, values, null, host::pickEntity))
         if (section.items != null) showItems(section)
@@ -113,6 +125,30 @@ class SettingsScreen(
         for ((label, action) in group.items()) {
             pane.addView(space(theme.spacing.m.toInt()))
             pane.addView(ButtonView(context, theme, label, action))
+        }
+        val rows = LinearLayout(context).apply { orientation = VERTICAL }
+        pane.addView(rows)
+        val token = shown
+        group.info { list -> if (token == shown) fillInfo(rows, list) }
+    }
+
+    private fun fillInfo(box: LinearLayout, list: List<InfoRow>) {
+        box.removeAllViews()
+        for (r in list) {
+            val value = r.value
+            if (value == null) {
+                box.addView(space(theme.spacing.l.toInt()))
+                box.addView(TextView(context).styled(theme.type.subtitle1, theme.colors.onBackground).apply { text = r.label })
+                continue
+            }
+            val line = LinearLayout(context).apply { orientation = HORIZONTAL }
+            line.setPadding(0, theme.spacing.xs.toInt(), 0, theme.spacing.xs.toInt())
+            line.addView(TextView(context).styled(theme.type.body2, theme.colors.onBackground).apply { text = r.label }, LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            line.addView(
+                TextView(context).styled(theme.type.body2, if (r.bad) theme.colors.error else theme.colors.onBackground).apply { text = value },
+                LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, VALUE_SHARE),
+            )
+            box.addView(line)
         }
     }
 
@@ -134,6 +170,7 @@ class SettingsScreen(
 
     // one item on its own page. done puts it back in the list, save still has to be pressed
     private fun editItem(section: SettingsSection, index: Int) {
+        shown++
         val list = items(section)
         val item = HashMap<String, JsonElement>(list.getOrNull(index) ?: host.newItem(section.id))
         bar.visibility = GONE
@@ -179,5 +216,7 @@ class SettingsScreen(
     private companion object {
         // fields get three times the room the section list does
         const val RIGHT_SHARE = 3f
+        // in a read only row the value gets three times the label's room
+        const val VALUE_SHARE = 3f
     }
 }
