@@ -53,6 +53,7 @@ object WidgetSchemas {
                 SchemaField("quick", "quick add chips, comma separated", FieldKind.TEXT),
             ),
         ),
+        WidgetSchema("notifications", "notifications", 1, 2, listOf(SchemaField("title", "title", FieldKind.TEXT))),
         WidgetSchema("placeholder", "placeholder", 1, 1, listOf(SchemaField("title", "title", FieldKind.TEXT))),
     )
 
