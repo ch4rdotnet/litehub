@@ -34,6 +34,9 @@ data class ReportingSettings(val heartbeatMinutes: Int = 15, val interactionSeco
 @Serializable
 data class DlnaSettings(val enabled: Boolean = false, val port: Int = DEFAULT_DLNA_PORT, val uuid: String? = null)
 
+// anything faster is a slideshow, not a frame, and costs a decode every few seconds
+const val MIN_PHOTO_SECONDS = 5
+
 // the start of the dynamic range, where upnp devices usually sit
 const val DEFAULT_DLNA_PORT = 49152
 

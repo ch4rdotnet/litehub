@@ -1,6 +1,7 @@
 package com.chardidathing.litehub.ui.widgets
 
 import com.chardidathing.litehub.core.model.FieldKind
+import com.chardidathing.litehub.core.model.MIN_PHOTO_SECONDS
 import com.chardidathing.litehub.core.model.SchemaField
 import com.chardidathing.litehub.core.model.WidgetSchema
 import kotlinx.serialization.json.JsonPrimitive
@@ -65,6 +66,11 @@ object WidgetSchemas {
                 SchemaField("entities", "entities", FieldKind.ENTITIES, required = true),
             ),
             description = "lots of entities in one tile, each with its state, tap one to toggle it",
+        ),
+        WidgetSchema(
+            "photo", "photo frame", 1, 1,
+            listOf(SchemaField("seconds", "seconds per photo (blank uses the screensaver's)", FieldKind.NUMBER, min = MIN_PHOTO_SECONDS.toDouble())),
+            description = "the screensaver's photos in a tile, one fading into the next",
         ),
         WidgetSchema("notifications", "notifications", 1, 2, listOf(SchemaField("title", "title", FieldKind.TEXT)), description = "what home assistant has sent, tap one to clear it"),
         WidgetSchema("placeholder", "placeholder", 1, 1, listOf(SchemaField("title", "title", FieldKind.TEXT)), description = "an empty tile to hold a space"),

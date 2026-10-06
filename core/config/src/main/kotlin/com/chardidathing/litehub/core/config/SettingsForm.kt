@@ -8,6 +8,7 @@ import com.chardidathing.litehub.core.model.FieldKind
 import com.chardidathing.litehub.core.model.Hex
 import com.chardidathing.litehub.core.model.ImmichSettings
 import com.chardidathing.litehub.core.model.Location
+import com.chardidathing.litehub.core.model.MIN_PHOTO_SECONDS
 import com.chardidathing.litehub.core.model.NightMode
 import com.chardidathing.litehub.core.model.NightSettings
 import com.chardidathing.litehub.core.model.PhotoSettings
@@ -68,7 +69,7 @@ object SettingsForm {
                 SchemaField("photos.immichKey", "immich api key", FieldKind.SECRET, showIf = mapOf(PHOTOS to "immich")),
                 text("photos.immichAlbum", "immich album id", mapOf(PHOTOS to "immich")),
                 text("photos.haMedia", "media folder (media-source://...)", mapOf(PHOTOS to "ha")),
-                number("screensaver.photoSeconds", "seconds per photo", 5, 3600),
+                number("screensaver.photoSeconds", "seconds per photo", MIN_PHOTO_SECONDS, 3600),
                 number("screensaver.photoRefreshMinutes", "look for new photos every (minutes)", 5, 1440),
                 toggle("screensaver.dimWhileShowing", "dim the screen while it's showing"),
                 number("screensaver.showingDimPercent", "dims to (percent)", 1, 100, mapOf("screensaver.dimWhileShowing" to "true")),

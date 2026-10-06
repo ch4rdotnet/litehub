@@ -8,6 +8,7 @@ import com.chardidathing.litehub.ui.widgets.CalendarWidget
 import com.chardidathing.litehub.ui.widgets.EntityWidget
 import com.chardidathing.litehub.ui.widgets.EntitiesWidget
 import com.chardidathing.litehub.ui.widgets.FeedWidget
+import com.chardidathing.litehub.ui.widgets.PhotoWidget
 import com.chardidathing.litehub.ui.widgets.Moment
 import com.chardidathing.litehub.ui.widgets.NotificationsWidget
 import com.chardidathing.litehub.ui.widgets.TodoWidget
@@ -17,6 +18,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 // feeds the page on screen and keeps its neighbours laid out with their last known data, so a
@@ -30,6 +32,9 @@ class DashboardBinder(
     // a list's "type" chip wants the keyboard, the activity owns that
     private val askText: (title: String, onText: (String) -> Unit) -> Unit,
     private val notifications: NotificationCenter,
+    // a fresh frame per photo tile, each keeps its own shuffled queue
+    private val photoFrame: () -> Result<PhotoFrame>,
+    private val photoSeconds: () -> Int,
     private val now: StateFlow<Moment>,
     private val pages: List<List<WidgetView>>,
     private val scope: CoroutineScope,
@@ -91,6 +96,21 @@ class DashboardBinder(
         is EntitiesWidget -> scope.launch {
             for (id in widget.config.entities.distinct()) launch { ha.snapshot(id).collect { widget.show(id, it) } }
         }
+        is PhotoWidget -> scope.launch {
+            val frame = photoFrame().getOrElse {
+                widget.fail(it.message ?: "no photos")
+                return@launch
+            }
+            while (true) {
+                // decoded at the tile's own size, which isn't known until it's laid out
+                if (widget.width == 0 || widget.height == 0) {
+                    delay(LAYOUT_WAIT_MS)
+                    continue
+                }
+                frame.next(widget.width, widget.height).fold(widget::show) { widget.fail(it.message ?: "couldn't load a photo") }
+                delay((widget.config.seconds ?: photoSeconds()) * MS_PER_S)
+            }
+        }
         is NotificationsWidget -> scope.launch { combine(notifications.items, now, ::Pair).collect { (n, m) -> widget.show(n, m) } }
         is TodoWidget -> scope.launch {
             try {
@@ -100,5 +120,10 @@ class DashboardBinder(
             }
         }
         else -> null
+    }
+
+    private companion object {
+        const val LAYOUT_WAIT_MS = 100L
+        const val MS_PER_S = 1000L
     }
 }

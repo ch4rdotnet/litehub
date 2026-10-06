@@ -52,7 +52,6 @@ class MainActivity : Activity() {
         const val PERCENT = 100f
         const val MS_PER_S = 1000L
         const val MAX_LEVEL = 255f
-        const val MINUTE_MS = 60_000L
         val ACTIVE = setOf(Transport.TRANSITIONING, Transport.PLAYING, Transport.PAUSED)
     }
 
@@ -228,10 +227,9 @@ class MainActivity : Activity() {
             root.addView(view)
             saverJobs += scope.launch { ticker.now.collect { view.showTime(it.time(it.nowMs), it.longDate()) } }
             val settings = app.settings.screensaver
-            val photos = settings.photos
-            // the photo frame is one of the first things a low ram device does without
-            if (photos != null && !DeviceTier.isLow(app)) saverJobs += scope.launch {
-                val frame = PhotoFrame(photos, settings.photoRefreshMinutes * MINUTE_MS, app.ha, app.http)
+            // no photos (none set up, or a low ram device) is just the clock over black
+            val frame = app.photoFrame().getOrNull()
+            if (frame != null) saverJobs += scope.launch {
                 while (true) {
                     val w = root.width
                     val h = root.height
@@ -499,7 +497,7 @@ class MainActivity : Activity() {
                     widgets += made
                     view
                 }
-                val b = DashboardBinder(app.ha, app.calendars, app.feeds, app.weather, ::askText, app.notifications, ticker.now, widgets, scope)
+                val b = DashboardBinder(app.ha, app.calendars, app.feeds, app.weather, ::askText, app.notifications, app::photoFrame, { app.settings.screensaver.photoSeconds }, ticker.now, widgets, scope)
                 binder = b
                 PagerView(this, theme, pages).also {
                     pager = it
