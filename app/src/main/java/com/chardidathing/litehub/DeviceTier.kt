@@ -3,7 +3,9 @@ package com.chardidathing.litehub
 import android.app.ActivityManager
 import android.content.Context
 
-// the plan's floor is 1gb devices, they still get the dashboard but lose the extras
+// the plan's floor is 1gb devices, they still get the dashboard but lose the extras.
+// goes by real ram, not isLowRamDevice, vendors set ro.config.low_ram on 2gb frames to slim
+// their firmware (the skylight does)
 object DeviceTier {
 
     private const val LOW_RAM_BYTES = 1536L * 1024 * 1024
@@ -11,6 +13,6 @@ object DeviceTier {
     fun isLow(context: Context): Boolean {
         val am = context.getSystemService(ActivityManager::class.java)
         val info = ActivityManager.MemoryInfo().also(am::getMemoryInfo)
-        return am.isLowRamDevice || info.totalMem < LOW_RAM_BYTES
+        return info.totalMem < LOW_RAM_BYTES
     }
 }
