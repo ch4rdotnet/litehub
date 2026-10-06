@@ -16,7 +16,18 @@ data class DeviceSettings(
     // notification banners play a short chime, a message can still ask for silence
     val chime: Boolean = true,
     val dlna: DlnaSettings = DlnaSettings(),
+    val notifications: NotificationSettings = NotificationSettings(),
+    val reporting: ReportingSettings = ReportingSettings(),
 )
+
+// the banners in the top right and the list behind the shade
+@Serializable
+data class NotificationSettings(val bannerSeconds: Int = 5, val maxBanners: Int = 7, val keep: Int = 50)
+
+// how often the companion sensors go to ha even when nothing changed, and how often a touch
+// updates last interaction
+@Serializable
+data class ReportingSettings(val heartbeatMinutes: Int = 15, val interactionSeconds: Int = 60)
 
 // the hub as a dlna media renderer ha (or anything else on the lan) can play to. uuid is made
 // the first time it's turned on and kept, so ha sees the same device across restarts
@@ -33,13 +44,20 @@ data class ScreensaverSettings(
     val idleMinutes: Int = 10,
     val photos: PhotoSettings? = null,
     val photoSeconds: Int = 30,
+    // the photo list is read again this often so new photos turn up
+    val photoRefreshMinutes: Int = 60,
     val night: NightSettings? = null,
     // ha entities that wake the screen when they turn on (a pir, a door)
     val wakeEntities: List<String> = emptyList(),
     // a sudden change in room light, a lamp going on
     val lightWake: Boolean = true,
+    // the jump that counts, this many times the room's usual light and at least this many lux
+    val lightWakeRatio: Float = 3f,
+    val lightWakeLux: Int = 15,
     // low resolution motion detection, off unless asked for and never on a low ram device
     val cameraWake: Boolean = false,
+    // how much of the picture has to change to count as someone there
+    val cameraWakePercent: Int = 6,
 )
 
 // exactly one source. immich's key stays in this device only file, it's never exported
