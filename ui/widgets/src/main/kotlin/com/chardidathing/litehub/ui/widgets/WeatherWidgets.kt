@@ -6,8 +6,10 @@ import android.text.Layout
 import com.chardidathing.litehub.core.model.Forecast
 import com.chardidathing.litehub.core.model.Weather
 import com.chardidathing.litehub.core.model.WeatherSnapshot
+import com.chardidathing.litehub.core.model.WeatherShows
 import com.chardidathing.litehub.ui.components.IconBlock
 import com.chardidathing.litehub.ui.components.Icons
+import com.chardidathing.litehub.ui.components.ScreensaverView
 import com.chardidathing.litehub.ui.components.TextBlock
 import com.chardidathing.litehub.ui.components.WidgetView
 import com.chardidathing.litehub.ui.tokens.ResolvedTheme
@@ -26,7 +28,7 @@ interface WeatherWidget {
 }
 
 // ha's condition names to mdi icons and to words
-internal object Conditions {
+object Conditions {
     fun icon(condition: String): String = when (condition) {
         "sunny" -> "weather-sunny"
         "clear-night" -> "weather-night"
@@ -228,6 +230,29 @@ class DailyWidget(context: Context, theme: ResolvedTheme, icons: Icons, config: 
             r.icon.draw(canvas, iconX, y)
             r.range.draw(canvas, iconX + theme.iconSize + theme.spacing.m, mid - r.range.height / 2f)
             r.rain.draw(canvas, content.right - rainWidth - 1, mid - r.rain.height / 2f)
+        }
+    }
+}
+
+// the screensaver's weather, worded the way the tiles word it. null while it's still loading
+object SaverWeather {
+
+    // past this the row reaches across into the clock's half
+    private const val DAYS = 4
+
+    fun of(snapshot: WeatherSnapshot, shows: WeatherShows, icons: Icons, now: Moment): ScreensaverView.Weather? = when (snapshot) {
+        WeatherSnapshot.Loading -> null
+        is WeatherSnapshot.Failed -> ScreensaverView.Weather(null, "", "couldn't get the weather, ${snapshot.reason}")
+        is WeatherSnapshot.Ready -> {
+            val w = snapshot.weather
+            fun date(f: Forecast) = Instant.ofEpochMilli(f.timeMs).atZone(now.zone).toLocalDate()
+            fun range(f: Forecast) = "${Conditions.degrees(f.temperature)} / ${Conditions.degrees(f.low)}"
+            val today = w.daily.firstOrNull { date(it) == now.today }
+            val detail = listOfNotNull(Conditions.words(w.condition), today?.takeIf { shows != WeatherShows.NOW }?.let(::range))
+            val days = if (shows != WeatherShows.DAYS) emptyList() else w.daily.filter { date(it) > now.today }.take(DAYS).map { f ->
+                ScreensaverView.Day(now.weekday(date(f)), icons.path(Conditions.icon(f.condition)), range(f))
+            }
+            ScreensaverView.Weather(icons.path(Conditions.icon(w.condition)), Conditions.degrees(w.temperature), detail.joinToString("  ·  "), days)
         }
     }
 }

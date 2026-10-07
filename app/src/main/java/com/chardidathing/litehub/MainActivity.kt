@@ -16,6 +16,7 @@ import com.chardidathing.litehub.ui.components.VideoFrame
 import com.chardidathing.litehub.dlna.RendererState
 import com.chardidathing.litehub.dlna.Transport
 import com.chardidathing.litehub.ui.components.ScreensaverView
+import com.chardidathing.litehub.ui.widgets.SaverWeather
 import com.chardidathing.litehub.ui.components.ShadeView
 import com.chardidathing.litehub.ui.widgets.NotificationsConfig
 import com.chardidathing.litehub.ui.widgets.NotificationsWidget
@@ -234,6 +235,12 @@ class MainActivity : Activity() {
             root.addView(view)
             saverJobs += scope.launch { ticker.now.collect { view.showTime(it.time(it.nowMs), it.longDate()) } }
             val settings = app.settings.screensaver
+            settings.weather?.let { wanted ->
+                val weather = app.weather.watch(app.weather.key(wanted.entity))
+                saverJobs += scope.launch {
+                    combine(weather, ticker.now, ::Pair).collect { (s, m) -> view.showWeather(SaverWeather.of(s, wanted.shows, app.icons, m)) }
+                }
+            }
             // no photos (none set up, or a low ram device) is just the clock over black
             val frame = app.photoFrame().getOrNull()
             if (frame != null) saverJobs += scope.launch {

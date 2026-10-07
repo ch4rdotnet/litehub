@@ -148,7 +148,8 @@ class LitehubApp : Application() {
     // reload to pick them up. blocking
     fun saveAll(before: HubSettings, saved: SavedSettings): Boolean {
         if (saved.device != before.device) updateSettings(saved.device)
-        var reload = false
+        // the screensaver's weather is fetched with the dashboard's, a new source means a reload
+        var reload = saved.device.screensaver.weather != before.device.screensaver.weather
         if (saved.sources != before.sources) {
             File(filesDir, SOURCES_FILE).writeAtomic(SourcesCodec.encode(saved.sources))
             reload = true

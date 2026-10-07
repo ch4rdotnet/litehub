@@ -26,6 +26,9 @@ class IconBlock {
         }
     }
 
+    // a soft shadow behind the shape, for icons that sit on photos
+    fun shadow(radius: Float, color: Int) = paint.setShadowLayer(radius, 0f, 0f, color)
+
     fun draw(canvas: Canvas, x: Float, y: Float) {
         if (source == null) return
         canvas.save()

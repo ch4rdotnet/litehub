@@ -64,7 +64,20 @@ data class ScreensaverSettings(
     val cameraWake: Boolean = false,
     // how much of the picture has to change to count as someone there
     val cameraWakePercent: Int = 6,
+    // in the bottom right, opposite the clock. null is no weather
+    val weather: ScreensaverWeather? = null,
 )
+
+// entity null is open-meteo at the location in sources.json, the same as the weather tiles
+@Serializable
+data class ScreensaverWeather(val shows: WeatherShows = WeatherShows.NOW, val entity: String? = null)
+
+@Serializable
+enum class WeatherShows {
+    @SerialName("now") NOW,
+    @SerialName("today") TODAY,
+    @SerialName("days") DAYS,
+}
 
 // exactly one source. immich's key stays in this device only file, it's never exported
 @Serializable

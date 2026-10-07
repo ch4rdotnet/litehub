@@ -48,7 +48,10 @@ class DashboardLoader(private val app: LitehubApp) {
         app.calendars.preload()
         app.feeds.preload()
         val weather = dashboard.pages.flatMap { it.widgets }.filter(WidgetCatalog::isWeather)
-        app.weather.prepare(weather.mapTo(HashSet()) { app.weather.key(WidgetCatalog.weatherEntity(it)) })
+        val keys = weather.mapTo(HashSet()) { app.weather.key(WidgetCatalog.weatherEntity(it)) }
+        // the screensaver's weather refreshes with the tiles', it's shown over this same dashboard
+        app.settings.screensaver.weather?.let { keys += app.weather.key(it.entity) }
+        app.weather.prepare(keys)
         Screen.Ready(ResolvedTheme(theme, metrics, app.fonts, DeviceTier.isLow(app)), config, dashboard.pages, app.icons, legend(theme))
     } catch (e: ConfigException) {
         failed(e.message.orEmpty(), systemDark, metrics)

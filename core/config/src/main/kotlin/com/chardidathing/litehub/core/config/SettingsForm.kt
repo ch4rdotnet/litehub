@@ -13,8 +13,10 @@ import com.chardidathing.litehub.core.model.NightMode
 import com.chardidathing.litehub.core.model.NightSettings
 import com.chardidathing.litehub.core.model.PhotoSettings
 import com.chardidathing.litehub.core.model.SchemaField
+import com.chardidathing.litehub.core.model.ScreensaverWeather
 import com.chardidathing.litehub.core.model.SettingsSection
 import com.chardidathing.litehub.core.model.Sources
+import com.chardidathing.litehub.core.model.WeatherShows
 import com.chardidathing.litehub.core.model.shownWith
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -42,6 +44,7 @@ object SettingsForm {
     private const val PHOTOS = "photos.source"
     private const val NIGHT = "night.enabled"
     private const val LOCATION = "location.set"
+    private const val WEATHER = "screensaver.weather"
     const val CALENDARS = "calendars"
     const val FEEDS = "feeds"
 
@@ -73,6 +76,20 @@ object SettingsForm {
                 number("screensaver.photoRefreshMinutes", "look for new photos every (minutes)", 5, 1440),
                 toggle("screensaver.dimWhileShowing", "dim the screen while it's showing"),
                 number("screensaver.showingDimPercent", "dims to (percent)", 1, 100, mapOf("screensaver.dimWhileShowing" to "true")),
+                toggle(WEATHER, "weather"),
+                SchemaField(
+                    "screensaver.weatherShows", "the weather shows", FieldKind.CHOICE,
+                    options = listOf(
+                        Choice("now", "now"),
+                        Choice("today", "now and today's high and low"),
+                        Choice("days", "now and the next few days"),
+                    ),
+                    showIf = mapOf(WEATHER to "true"),
+                ),
+                SchemaField(
+                    "screensaver.weatherEntity", "weather entity (none uses open-meteo)", FieldKind.ENTITY,
+                    domains = listOf("weather"), showIf = mapOf(WEATHER to "true"),
+                ),
             ),
         ),
         SettingsSection(
@@ -207,6 +224,9 @@ object SettingsForm {
                 "screensaver.photoRefreshMinutes" to JsonPrimitive(saver.photoRefreshMinutes),
                 "screensaver.dimWhileShowing" to JsonPrimitive(saver.dimWhileShowing),
                 "screensaver.showingDimPercent" to JsonPrimitive(saver.showingDimPercent),
+                WEATHER to JsonPrimitive(saver.weather != null),
+                "screensaver.weatherShows" to JsonPrimitive((saver.weather?.shows ?: WeatherShows.NOW).name.lowercase(Locale.ROOT)),
+                "screensaver.weatherEntity" to JsonPrimitive(saver.weather?.entity.orEmpty()),
                 NIGHT to JsonPrimitive(saver.night != null),
                 "night.start" to JsonPrimitive(night.start),
                 "night.end" to JsonPrimitive(night.end),
@@ -376,6 +396,10 @@ object SettingsForm {
                 lightWakeLux = v.int("screensaver.lightWakeLux"),
                 cameraWake = v.bool("screensaver.cameraWake"),
                 cameraWakePercent = v.int("screensaver.cameraWakePercent"),
+                weather = if (!v.bool(WEATHER)) null else ScreensaverWeather(
+                    shows = WeatherShows.entries.first { it.name.lowercase(Locale.ROOT) == v.text("screensaver.weatherShows") },
+                    entity = v.text("screensaver.weatherEntity").ifEmpty { null },
+                ),
             ),
             chime = v.bool("chime"),
             notifications = s.notifications.copy(
