@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.text.Layout
 import com.chardidathing.litehub.core.model.CalendarSnapshot
+import com.chardidathing.litehub.ui.components.ColorKey
 import com.chardidathing.litehub.ui.components.TextBlock
 import com.chardidathing.litehub.ui.components.WidgetView
 import com.chardidathing.litehub.ui.tokens.ResolvedTheme
@@ -30,6 +31,9 @@ class MonthWidget(context: Context, theme: ResolvedTheme, config: MonthConfig, p
 
     private val sources = config.calendars.ifEmpty { legend.calendars }
     private var model: Model? = null
+
+    private val keyEntries = if (config.key) CalendarWidget.key(sources, legend, theme.colors.primary) else emptyList()
+    private val key = ColorKey(theme)
 
     private val header = TextBlock(maxLines = 1)
     private val weekdays = Array(DAYS) { TextBlock(maxLines = 1) }
@@ -89,7 +93,9 @@ class MonthWidget(context: Context, theme: ResolvedTheme, config: MonthConfig, p
         val center = Layout.Alignment.ALIGN_CENTER
         m.weekdays.forEachIndexed { i, name -> weekdays[i].set(name, theme.type.caption, theme.colors.onSurface, cellWidth.toInt()) }
         val gridTop = weekdayTop + weekdays[0].height + theme.spacing.xs
-        val cellHeight = (content.height() - gridTop) / WEEKS
+        key.set(keyEntries, w.toInt())
+        val keySpace = if (keyEntries.isEmpty()) 0f else key.height + theme.spacing.s
+        val cellHeight = (content.height() - gridTop - keySpace) / WEEKS
 
         val lead = Math.floorMod(m.first.dayOfWeek.value - m.weekStart.value, DAYS)
         val daysInMonth = m.first.lengthOfMonth()
@@ -145,6 +151,7 @@ class MonthWidget(context: Context, theme: ResolvedTheme, config: MonthConfig, p
             dotPaint.color = dotColor[i]
             canvas.drawCircle(left + dotX[i], top + dotY[i], theme.spacing.xs, dotPaint)
         }
+        if (keyEntries.isNotEmpty()) key.draw(canvas, left, content.bottom - key.height)
     }
 
     private companion object {

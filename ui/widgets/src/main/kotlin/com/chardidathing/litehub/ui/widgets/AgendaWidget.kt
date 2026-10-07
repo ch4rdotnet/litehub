@@ -10,5 +10,9 @@ class AgendaWidget(context: Context, theme: ResolvedTheme, private val config: A
 
     private val sources = config.calendars.ifEmpty { legend.calendars }
 
+    init {
+        if (config.key) key = CalendarWidget.key(sources, legend, theme.colors.primary)
+    }
+
     override fun show(snapshot: CalendarSnapshot, now: Moment) = setRows(AgendaRows.build(snapshot, sources, config.days, legend, now))
 }

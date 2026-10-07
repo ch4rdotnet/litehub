@@ -3,6 +3,7 @@ package com.chardidathing.litehub.ui.widgets
 import android.content.Context
 import android.graphics.Canvas
 import com.chardidathing.litehub.core.model.SourceStatus
+import com.chardidathing.litehub.ui.components.ColorKey
 import com.chardidathing.litehub.ui.components.RowList
 import com.chardidathing.litehub.ui.components.RowList.Kind
 import com.chardidathing.litehub.ui.components.RowList.Row
@@ -16,6 +17,10 @@ abstract class ListWidget(context: Context, theme: ResolvedTheme, private val ti
     private val title = TextBlock(maxLines = 1)
     private val list = RowList(theme)
     private var rows: List<Row> = emptyList()
+    private val keyView = ColorKey(theme)
+
+    // under the list, what each colour means. empty is no key
+    protected var key: List<ColorKey.Entry> = emptyList()
 
     protected fun setRows(next: List<Row>) {
         if (next == rows) return
@@ -27,15 +32,19 @@ abstract class ListWidget(context: Context, theme: ResolvedTheme, private val ti
     override fun onContentChanged() {
         val w = content.width().toInt()
         title.set(titleText.orEmpty(), theme.type.h6, theme.colors.onSurface, w)
-        list.set(rows, w, (content.height() - listTop()).toInt())
+        keyView.set(key, w)
+        list.set(rows, w, (content.height() - listTop() - keySpace()).toInt())
     }
 
     override fun drawContent(canvas: Canvas) {
         if (titleText != null) title.draw(canvas, content.left, content.top)
         list.draw(canvas, content.left, content.top + listTop())
+        if (key.isNotEmpty()) keyView.draw(canvas, content.left, content.bottom - keyView.height)
     }
 
     private fun listTop() = if (titleText != null) title.height + theme.spacing.s else 0f
+
+    private fun keySpace() = if (key.isEmpty()) 0f else keyView.height + theme.spacing.s
 
     companion object {
         // a failed source says so, one that's never answered says it's still loading

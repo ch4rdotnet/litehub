@@ -35,10 +35,18 @@ object WidgetSchemas {
                 SchemaField("title", "title", FieldKind.TEXT),
                 SchemaField("calendars", "calendars (none picked shows all)", FieldKind.CALENDARS),
                 SchemaField("days", "days ahead", FieldKind.NUMBER, default = JsonPrimitive(AgendaConfig().days)),
+                SchemaField("key", KEY_LABEL, FieldKind.TOGGLE, default = JsonPrimitive(AgendaConfig().key)),
             ),
             description = "the next few days of events from your calendars",
         ),
-        WidgetSchema("month", "month", 2, 2, listOf(SchemaField("calendars", "calendars (none picked shows all)", FieldKind.CALENDARS)), description = "a month grid with dots on the days that have events"),
+        WidgetSchema(
+            "month", "month", 2, 2,
+            listOf(
+                SchemaField("calendars", "calendars (none picked shows all)", FieldKind.CALENDARS),
+                SchemaField("key", KEY_LABEL, FieldKind.TOGGLE, default = JsonPrimitive(MonthConfig().key)),
+            ),
+            description = "a month grid with dots on the days that have events",
+        ),
         WidgetSchema(
             "headlines", "headlines", 2, 1,
             listOf(
@@ -82,6 +90,8 @@ object WidgetSchemas {
     )
 
     fun of(type: String): WidgetSchema? = all.firstOrNull { it.type == type }
+
+    private const val KEY_LABEL = "show which colour is which calendar"
 
     private fun weather() = listOf(SchemaField("entity", "weather entity (none uses open-meteo)", FieldKind.ENTITY, domains = listOf("weather")))
 }
