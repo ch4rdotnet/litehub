@@ -4,7 +4,6 @@ import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.provider.Settings
-import android.view.MotionEvent
 import android.view.View
 import android.widget.FrameLayout
 import com.chardidathing.litehub.core.config.ConfigException
@@ -44,20 +43,27 @@ class AdminFlow(
     // edit layout needs a dashboard that loaded
     var canEdit = false
 
-    private val idle = Runnable { close() }
+    private val idle = IdleClose(container) { close() }
+
+    // between open() and close(). work still waiting on the network or disk when the screens
+    // close doesn't get to reopen them for whoever walks up next
+    private var live = false
 
     val isOpen get() = overlay != null
 
     fun open(theme: ResolvedTheme) {
         this.theme = theme
+        live = true
         val stored = app.settings.pin
         if (stored == null) menu() else askPin(stored)
     }
 
     fun close() {
-        container.removeCallbacks(idle)
+        live = false
+        idle.stop()
         overlay?.let(container::removeView)
         overlay = null
+        screen = null
     }
 
     private fun askPin(stored: String) {
@@ -287,24 +293,11 @@ class AdminFlow(
     }
 
     private fun show(view: View, idleMs: Long = IDLE_CLOSE_MS) {
+        if (!live) return
         overlay?.let(container::removeView)
-        // wrapped so every touch restarts the countdown, the view's own children included
-        val watched = object : FrameLayout(activity) {
-            override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
-                if (ev.actionMasked == MotionEvent.ACTION_DOWN) restartIdle(idleMs)
-                return super.dispatchTouchEvent(ev)
-            }
-        }
-        (view.parent as? FrameLayout)?.removeView(view)
-        watched.addView(view)
+        val watched = idle.wrap(view, idleMs)
         overlay = watched
         container.addView(watched)
-        restartIdle(idleMs)
-    }
-
-    private fun restartIdle(ms: Long) {
-        container.removeCallbacks(idle)
-        container.postDelayed(idle, ms)
     }
 
     private companion object {

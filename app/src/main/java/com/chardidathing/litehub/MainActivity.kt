@@ -125,6 +125,7 @@ class MainActivity : Activity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         admin.close()
+        editor.close()
     }
 
     override fun onStart() {
@@ -225,6 +226,9 @@ class MainActivity : Activity() {
         override fun showScreensaver() {
             val theme = this@MainActivity.theme ?: return
             if (saver != null) return
+            // nobody's at the screen, so nothing pin protected stays open under the screensaver
+            admin.close()
+            editor.close()
             val view = ScreensaverView(this@MainActivity, theme)
             saver = view
             root.addView(view)

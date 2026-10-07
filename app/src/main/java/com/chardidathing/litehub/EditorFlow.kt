@@ -49,7 +49,12 @@ class EditorFlow(
         push(view)
     }
 
+    // an editor left open is the pin's access left open, it goes after a while untouched and
+    // the edits with it
+    private val idle = IdleClose(container) { close() }
+
     fun close() {
+        idle.stop()
         hideKeyboard()
         stack.forEach(container::removeView)
         stack.clear()
@@ -141,8 +146,9 @@ class EditorFlow(
     }
 
     private fun push(view: View) {
-        stack += view
-        container.addView(view)
+        val watched = idle.wrap(view, IDLE_CLOSE_MS)
+        stack += watched
+        container.addView(watched)
     }
 
     private fun pop() {
@@ -153,5 +159,10 @@ class EditorFlow(
     private fun hideKeyboard() {
         val imm = activity.getSystemService(InputMethodManager::class.java)
         imm.hideSoftInputFromWindow(container.windowToken, 0)
+    }
+
+    private companion object {
+        // the same as the settings screen, typing on the keyboard isn't a touch on the screen
+        const val IDLE_CLOSE_MS = 5 * 60_000L
     }
 }
