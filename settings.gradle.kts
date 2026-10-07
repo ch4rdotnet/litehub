@@ -36,6 +36,7 @@ include(":ui:tokens")
 include(":ui:components")
 include(":ui:widgets")
 include(":ui:editor")
+include(":ui:launcher")
 include(":webui")
 include(":dlna")
  
