@@ -115,4 +115,44 @@ class ServerTest {
         assertTrue(ssdp.replies(search("upnp:rootdevice")).single().contains("USN: uuid:abc::upnp:rootdevice"))
         assertTrue(InetAddress.getByName("239.255.255.250") == Ssdp.GROUP)
     }
+
+    private fun post(path: String, body: String, headers: Map<String, String>): Int {
+        val b = Request.Builder().url(url(path)).post(body.toRequestBody("text/plain".toMediaType()))
+        headers.forEach { (k, v) -> b.header(k, v) }
+        return client.newCall(b.build()).execute().use { it.code }
+    }
+
+    @Test
+    fun `a plain web form post can't drive playback`() {
+        val play = "<?xml version=\"1.0\"?><s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\"><s:Body>" +
+            "<u:Play xmlns:u=\"${Service.AV_TRANSPORT.type}\"><InstanceID>0</InstanceID><Speed>1</Speed></u:Play></s:Body></s:Envelope>"
+        // no SOAPACTION and a form's content type, what a cross site page can send without asking
+        assertEquals(500, post("/ctl/AVTransport", play, emptyMap()))
+        // a page that does manage the headers still carries its Origin
+        assertEquals(403, post("/ctl/AVTransport", play, mapOf("Origin" to "http://evil.example", "SOAPACTION" to "x")))
+        // and a rebinding page shows up under its own domain
+        assertEquals(403, post("/ctl/AVTransport", play, mapOf("Host" to "evil.example:49152")))
+        assertTrue(player.calls.isEmpty())
+    }
+
+    @Test
+    fun `nesting deep enough to overflow the parser is refused before it`() {
+        val bomb = "<a>".repeat(80_000)
+        assertTrue(Xml.deeperThan(bomb, 64))
+        assertNull(Xml.parse(bomb))
+        assertTrue(!Xml.deeperThan("<s:Envelope><s:Body><u:Play><InstanceID>0</InstanceID><x/></u:Play></s:Body></s:Envelope>", 64))
+    }
+
+    @Test
+    fun `a url with a line break in it is refused`() {
+        val (code, body) = soap(Service.AV_TRANSPORT, "SetAVTransportURI", "<CurrentURI>http://10.0.0.2/a.mp3&#10;12:00:00 fake line</CurrentURI><CurrentURIMetaData></CurrentURIMetaData>")
+        assertEquals(500, code)
+        assertTrue(body.contains("<errorCode>402</errorCode>"))
+    }
+
+    @Test
+    fun `hosts a browser on the home network would use`() {
+        for (ok in listOf(null, "10.201.0.254:8080", "localhost:8080", "litehub", "litehub.local", "hub.lan:49152", "[fe80::1]:8080")) assertTrue(ok.toString(), com.chardidathing.litehub.core.model.LanHost.accepts(ok))
+        for (bad in listOf("evil.example", "evil.example:8080", "10.0.0.1.nip.io", "")) assertTrue(bad, !com.chardidathing.litehub.core.model.LanHost.accepts(bad))
+    }
 }

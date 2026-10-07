@@ -1,5 +1,6 @@
 package com.chardidathing.litehub.dlna
 
+import com.chardidathing.litehub.core.model.LanHost
 import okhttp3.OkHttpClient
 import java.io.IOException
 import java.net.Inet4Address
@@ -54,6 +55,9 @@ class DlnaServer(
     private fun handle(r: UpnpHttp.Request): UpnpHttp.Response {
         val local = r.remote.isSiteLocalAddress || r.remote.isLoopbackAddress || r.remote.isLinkLocalAddress
         if (!local) return UpnpHttp.Response(FORBIDDEN, "Forbidden")
+        // upnp control points never send an Origin, a web page always does. a rebinding page
+        // shows up under its own domain in Host
+        if (r.header("Origin") != null || !LanHost.accepts(r.header("Host"))) return UpnpHttp.Response(FORBIDDEN, "Forbidden")
         if (r.method == "GET" && r.path == DESCRIPTION) return UpnpHttp.Response(OK, "OK", description(), XML)
         for (service in Service.values()) {
             when (r.path) {
@@ -69,10 +73,13 @@ class DlnaServer(
     }
 
     private fun control(service: Service, r: UpnpHttp.Request): UpnpHttp.Response {
+        // both are what a real soap call carries, and neither can come from a plain web form, so
+        // a page can't post control requests without a preflight this server never answers
+        if (r.header("Content-Type")?.contains("xml", ignoreCase = true) != true) return fault(Renderer.INVALID_ACTION, "Invalid Action")
+        val header = r.header("SOAPACTION")?.trim('"') ?: return fault(Renderer.INVALID_ACTION, "Invalid Action")
         val call = Soap.parse(r.body) ?: return fault(Renderer.INVALID_ACTION, "Invalid Action")
         // SOAPACTION is "type#Action", it has to agree with the body
-        val header = r.header("SOAPACTION")?.trim('"')
-        if (header != null && header != "${service.type}#${call.action}") return fault(Renderer.INVALID_ACTION, "Invalid Action")
+        if (header != "${service.type}#${call.action}") return fault(Renderer.INVALID_ACTION, "Invalid Action")
         return when (val outcome = renderer.handle(service, call.action, call.args)) {
             is Outcome.Ok -> UpnpHttp.Response(OK, "OK", Soap.response(service, call.action, outcome.out), XML, listOf("EXT" to ""))
             is Outcome.Fault -> fault(outcome.code, outcome.description)

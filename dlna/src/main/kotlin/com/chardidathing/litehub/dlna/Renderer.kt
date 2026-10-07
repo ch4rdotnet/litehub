@@ -86,6 +86,8 @@ class Renderer(private val player: Player, private val log: (String) -> Unit) {
             "SetAVTransportURI" -> {
                 val uri = args["CurrentURI"].orEmpty().trim()
                 if (!uri.startsWith("http://") && !uri.startsWith("https://")) return Outcome.Fault(RESOURCE_NOT_FOUND, "only http urls play here")
+                // a real url has no line breaks or control characters, one that does is after the log
+                if (uri.any { it.isISOControl() }) return Outcome.Fault(INVALID_ARGS, "Invalid Args")
                 val metadata = args["CurrentURIMetaData"].orEmpty()
                 player.load(uri)
                 set(RendererState(Transport.STOPPED, uri, metadata, Didl.parse(metadata)))

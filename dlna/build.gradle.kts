@@ -18,6 +18,7 @@ android {
 
 dependencies {
     api(libs.kotlinx.coroutines.android)
+    implementation(project(":core:model"))
     api(libs.okhttp)
     testImplementation(libs.junit)
     testImplementation(libs.mockwebserver)

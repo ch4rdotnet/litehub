@@ -58,12 +58,21 @@ internal class UpnpHttp(private val port: Int, private val handler: (Request) ->
             s.soTimeout = TIMEOUT_MS
             val input = BufferedInputStream(s.getInputStream())
             val request = read(input, s.inetAddress)
-            val response = if (request == null) Response(BAD_REQUEST, "Bad Request") else handler(request)
+            val response = if (request == null) Response(BAD_REQUEST, "Bad Request") else answer(request)
             write(s, response)
             response.after?.invoke()
         } catch (e: IOException) {
             // the other end went away mid request, nothing to answer
         }
+    }
+
+    // a request that blows up in a way nobody planned for gets a 500, the app carries on
+    private fun answer(request: Request): Response = try {
+        handler(request)
+    } catch (e: StackOverflowError) {
+        Response(SERVER_ERROR, "Internal Server Error")
+    } catch (e: RuntimeException) {
+        Response(SERVER_ERROR, "Internal Server Error")
     }
 
     private fun read(input: InputStream, remote: InetAddress): Request? {
@@ -125,6 +134,7 @@ internal class UpnpHttp(private val port: Int, private val handler: (Request) ->
     companion object {
         const val SERVER = "Android/1.0 UPnP/1.0 litehub/1.0"
         const val BAD_REQUEST = 400
+        const val SERVER_ERROR = 500
         private const val WORKERS = 4
         private const val TIMEOUT_MS = 5_000
         private const val MAX_LINE = 8 * 1024
