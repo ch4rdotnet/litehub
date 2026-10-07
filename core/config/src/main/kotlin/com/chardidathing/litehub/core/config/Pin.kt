@@ -9,9 +9,10 @@ import javax.crypto.spec.PBEKeySpec
 // pins are stored as "pbkdf2$iterations$salt$hash", a copied settings.json doesn't give the pin away
 object Pin {
 
-    const val MIN_LENGTH = 4
+    // a pin set before this went up to 6 still works, a new one needs 6
+    const val MIN_LENGTH = 6
 
-    // slow enough to make guessing a 4 digit pin offline tedious, quick enough on an a55 core
+    // slow enough to make guessing a pin offline tedious, quick enough on an a55 core
     private const val ITERATIONS = 20_000
     private const val SALT_BYTES = 16
     private const val KEY_BITS = 256
