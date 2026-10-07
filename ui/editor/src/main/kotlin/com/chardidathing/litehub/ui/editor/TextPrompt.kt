@@ -2,6 +2,7 @@ package com.chardidathing.litehub.ui.editor
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.text.InputType
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.ViewGroup
@@ -21,10 +22,14 @@ class TextPrompt(
     title: String,
     private val onDone: (String) -> Unit,
     onCancel: () -> Unit,
+    action: String = "add",
+    // a passphrase, dotted out and kept off the keyboard's suggestions
+    secret: Boolean = false,
 ) : FrameLayout(context) {
 
     val input: EditText = EditText(context).styledInput(theme).apply {
         imeOptions = EditorInfo.IME_ACTION_DONE
+        if (secret) inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
         // the soft keyboard sends done, a hardware or injected enter comes through as a key event
         setOnEditorActionListener { _, action, event ->
             if (action == EditorInfo.IME_ACTION_DONE || event?.keyCode == KeyEvent.KEYCODE_ENTER) submit()
@@ -43,7 +48,7 @@ class TextPrompt(
         column.addView(TextView(context).styled(theme.type.h5, theme.colors.onBackground).apply { text = title })
         column.addView(input, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         val actions = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
-        actions.addView(ButtonView(context, theme, "add") { submit() })
+        actions.addView(ButtonView(context, theme, action) { submit() })
         actions.addView(android.view.View(context), LinearLayout.LayoutParams(theme.spacing.m.toInt(), 1))
         actions.addView(ButtonView(context, theme, "cancel", onCancel))
         column.addView(actions)

@@ -25,6 +25,12 @@ interface HubAccess {
     // flat key to value edits, checked like the device's own settings screen checks them
     fun saveSettings(text: String): Result<Unit>
 
+    // the whole hub as a zip from {"passphrase": "..."}, the secrets sealed with it when it's there
+    fun backup(request: String): Result<ByteArray>
+
+    // {"zip": base64, "passphrase": "..."} laid over the hub, its secrets only with the passphrase
+    fun restore(request: String): Result<Unit>
+
     // a settings section's button (ha's home location), the values it fills in as json
     suspend fun settingsAction(id: String): Result<String>
 

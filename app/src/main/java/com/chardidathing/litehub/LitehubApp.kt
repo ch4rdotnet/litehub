@@ -2,6 +2,7 @@ package com.chardidathing.litehub
 
 import android.app.Application
 import android.os.Build
+import com.chardidathing.litehub.core.config.ConfigCodec
 import com.chardidathing.litehub.core.config.ConfigException
 import com.chardidathing.litehub.core.config.HubSettings
 import com.chardidathing.litehub.core.config.PinThrottle
@@ -9,6 +10,7 @@ import com.chardidathing.litehub.core.config.SavedSettings
 import com.chardidathing.litehub.core.config.SettingsCodec
 import com.chardidathing.litehub.core.config.SettingsForm
 import com.chardidathing.litehub.core.config.SourcesCodec
+import com.chardidathing.litehub.core.config.Themes
 import com.chardidathing.litehub.core.model.DeviceSettings
 import com.chardidathing.litehub.core.model.Sources
 import com.chardidathing.litehub.source.calendar.CalendarRepository
@@ -22,6 +24,7 @@ import com.chardidathing.litehub.source.ha.HaCredentials
 import com.chardidathing.litehub.source.weather.WeatherRepository
 import com.chardidathing.litehub.ui.components.Icons
 import com.chardidathing.litehub.ui.tokens.Fonts
+import com.chardidathing.litehub.ui.tokens.Presets
 import java.io.File
 import java.io.IOException
 import kotlinx.coroutines.launch
@@ -70,6 +73,8 @@ class LitehubApp : Application() {
     val status by lazy { HubStatus(this) }
 
     val updater by lazy { Updater(this) }
+
+    val backups by lazy { Backups(this) }
 
     // wrong pin guesses, counted across the device's pin pad and the web login together
     val pinThrottle = PinThrottle()
@@ -164,6 +169,17 @@ class LitehubApp : Application() {
             JsonObject(mapOf("location.set" to JsonPrimitive(true), "location.latitude" to JsonPrimitive(lat), "location.longitude" to JsonPrimitive(lon)))
         }
         else -> Result.failure(IOException("there's no action called $id"))
+    }
+
+    // config.json as it would load, the codec doesn't know the built in themes so they're checked
+    // here. throws ConfigException naming the problem
+    fun checkConfig(text: String) {
+        val config = ConfigCodec.decode(text)
+        val themes = Themes(Presets.all, config.themes)
+        config.dashboards.forEach { d ->
+            themes[d.theme.light]
+            themes[d.theme.dark]
+        }
     }
 
     // forget everything read from ha.json, sources.json and settings.json, next use reads again

@@ -524,7 +524,9 @@ async function loadSettings() {
 
 function drawSettingsSections() {
   const list = $("settings-sections");
-  list.innerHTML = hubSettings.sections.map((s, i) => `<button type="button" data-i="${i}" class="${i === settingsSection ? "on" : ""}">${s.name}</button>`).join("");
+  // backup sits after the hub's own sections, it isn't a form the hub sends
+  list.innerHTML = [...hubSettings.sections.map((s) => s.name), "backup"]
+    .map((name, i) => `<button type="button" data-i="${i}" class="${i === settingsSection ? "on" : ""}">${name}</button>`).join("");
   list.querySelectorAll("button").forEach((b) => b.onclick = () => { settingsSection = Number(b.dataset.i); editingItem = null; drawSettingsSections(); });
   drawSettingsFields();
 }
@@ -560,7 +562,8 @@ function bindFields(form, fields, values) {
 
 function drawSettingsFields() {
   const section = hubSettings.sections[settingsSection], form = $("settings-form");
-  $("settings-save").hidden = $("settings-cancel").hidden = editingItem !== null;
+  $("settings-save").hidden = $("settings-cancel").hidden = editingItem !== null || !section;
+  if (!section) return drawBackup();
   if (editingItem !== null) return drawItem(section);
   form.innerHTML = `<h2>${section.name}</h2>`;
   // empty lists aren't sent, a list section has no fields of its own
@@ -594,6 +597,74 @@ function drawItem(section) {
   };
   if (editingItem >= 0) $("item-remove").onclick = () => { settingsEdits[section.id] = items.filter((_, i) => i !== editingItem); close(); };
   $("item-back").onclick = close;
+}
+
+// the whole hub as a zip. secrets only go in sealed with a passphrase, asked twice since a typo
+// would seal them for good
+const MIN_PASSPHRASE = 8;
+// fromCharCode takes its bytes as arguments, too many at once overflows the stack
+const SPREAD_CHUNK = 0x8000;
+
+function drawBackup() {
+  const form = $("settings-form");
+  form.innerHTML = `<h2>backup</h2>
+    <p class="muted">dashboards, themes, sources and settings in one zip</p>
+    <label class="toggle"><input type="checkbox" id="backup-secrets">include secrets</label>
+    <p class="muted">the pin, the home assistant token, the immich key, and what ha and dlna know this hub as. they're sealed with the passphrase and can't be restored without it</p>
+    <div id="backup-passphrase" hidden>
+      <label>passphrase, at least ${MIN_PASSPHRASE} characters<input type="password" id="backup-pass" autocomplete="new-password"></label>
+      <label>the same passphrase again<input type="password" id="backup-again" autocomplete="new-password"></label>
+    </div>
+    <div class="bar"><button type="button" id="backup-save" class="primary">download a backup</button></div>
+    <h2>restore</h2>
+    <p class="muted">the hub's dashboards, sources and settings are replaced with the backup's</p>
+    <label>backup<input type="file" id="restore-file" accept=".zip,application/zip"></label>
+    <label class="toggle"><input type="checkbox" id="restore-secrets">restore its secrets too</label>
+    <div id="restore-passphrase" hidden><label>the backup's passphrase<input type="password" id="restore-pass" autocomplete="off"></label></div>
+    <div class="bar"><button type="button" id="restore-go">restore to hub</button></div>`;
+  form.oninput = form.onchange = () => {
+    $("backup-passphrase").hidden = !$("backup-secrets").checked;
+    $("restore-passphrase").hidden = !$("restore-secrets").checked;
+  };
+  form.onclick = null;
+  $("backup-save").onclick = saveBackup;
+  $("restore-go").onclick = restoreBackup;
+}
+
+async function saveBackup() {
+  const secrets = $("backup-secrets").checked, passphrase = $("backup-pass").value;
+  if (secrets && passphrase.length < MIN_PASSPHRASE) return say("settings-message", `the passphrase needs at least ${MIN_PASSPHRASE} characters`, true);
+  if (secrets && passphrase !== $("backup-again").value) return say("settings-message", "the passphrases don't match", true);
+  say("settings-message", "making the backup", false);
+  try {
+    const r = await fetch("/api/backup", { method: "POST", body: JSON.stringify(secrets ? { passphrase } : {}) });
+    if (r.status === 401) return showLogin();
+    if (!r.ok) throw new Error(await r.text());
+    const url = URL.createObjectURL(await r.blob());
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `litehub-backup-${new Date().toISOString().slice(0, 19).replace(/[-:]/g, "").replace("T", "-")}.zip`;
+    a.click();
+    URL.revokeObjectURL(url);
+    say("settings-message", secrets ? "downloaded, with its secrets" : "downloaded, without secrets", false);
+  } catch (e) { say("settings-message", e.message, true); }
+}
+
+async function restoreBackup() {
+  const file = $("restore-file").files[0];
+  if (!file) return say("settings-message", "pick a backup to restore", true);
+  const secrets = $("restore-secrets").checked;
+  if (secrets && !$("restore-pass").value) return say("settings-message", "enter the backup's passphrase, or untick its secrets", true);
+  if (!confirm(`replace the hub's dashboards, sources and settings with ${file.name}`)) return;
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += SPREAD_CHUNK) binary += String.fromCharCode(...bytes.subarray(i, i + SPREAD_CHUNK));
+  say("settings-message", "restoring", false);
+  try {
+    await api("/api/restore", { method: "POST", body: JSON.stringify({ zip: btoa(binary), ...(secrets ? { passphrase: $("restore-pass").value } : {}) }) });
+    // everything on this page is now stale, and the pin may have come back with it
+    location.reload();
+  } catch (e) { say("settings-message", e.message, true); }
 }
 
 async function runAction(id) {

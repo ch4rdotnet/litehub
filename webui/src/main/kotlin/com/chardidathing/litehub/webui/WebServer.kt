@@ -86,6 +86,10 @@ class WebServer(port: Int, private val access: HubAccess, private val assets: As
             get && path == "/api/sources" -> json(access.sources())
             get && path == "/api/settings" -> json(access.settings())
             s.method == NanoHTTPD.Method.PUT && path == "/api/settings" -> saved(access.saveSettings(body(s)))
+            s.method == NanoHTTPD.Method.POST && path == "/api/backup" -> access.backup(body(s)).fold({
+                NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "application/zip", ByteArrayInputStream(it), it.size.toLong()).apply { addHeader("Cache-Control", "no-store") }
+            }) { text(NanoHTTPD.Response.Status.BAD_REQUEST, it.message ?: "couldn't make the backup") }
+            s.method == NanoHTTPD.Method.POST && path == "/api/restore" -> saved(access.restore(body(s)))
             s.method == NanoHTTPD.Method.POST && path == "/api/settings/action" -> runBlocking { access.settingsAction(body(s).trim()) }
                 .fold(::json) { text(NanoHTTPD.Response.Status.SERVICE_UNAVAILABLE, it.message ?: "that didn't work") }
             get && path == "/api/entities" -> runBlocking { access.entities() }.fold(::json) { text(NanoHTTPD.Response.Status.SERVICE_UNAVAILABLE, it.message ?: "home assistant isn't reachable") }

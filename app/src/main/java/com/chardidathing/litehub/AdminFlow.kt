@@ -4,10 +4,12 @@ import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
 import android.view.View
 import android.view.inputmethod.InputMethodManager
 import android.widget.FrameLayout
+import com.chardidathing.litehub.core.config.Backup
 import com.chardidathing.litehub.core.config.ConfigException
 import com.chardidathing.litehub.core.config.HubSettings
 import com.chardidathing.litehub.core.config.Pin
@@ -16,7 +18,9 @@ import com.chardidathing.litehub.ui.components.MenuView
 import com.chardidathing.litehub.ui.components.PinPadView
 import com.chardidathing.litehub.ui.editor.EntityPicker
 import com.chardidathing.litehub.ui.editor.SettingsScreen
+import com.chardidathing.litehub.ui.editor.TextPrompt
 import com.chardidathing.litehub.ui.tokens.ResolvedTheme
+import java.io.File
 import java.io.IOException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -115,7 +119,7 @@ class AdminFlow(
         val t = theme ?: return
         scope.launch {
             val before = withContext(Dispatchers.IO) { app.hubSettings() }
-            val s = SettingsScreen(activity, t, SettingsForm.sections, SettingsForm.values(before), listOf(device(), updates(), log()), object : SettingsScreen.Host {
+            val s = SettingsScreen(activity, t, SettingsForm.sections, SettingsForm.values(before), listOf(device(), updates(), backup(), log()), object : SettingsScreen.Host {
                 override fun pickEntity(domains: List<String>, onPicked: (String) -> Unit) = pick(t, domains, onPicked)
                 override fun newItem(section: String) = SettingsForm.newItem(section)
                 override fun action(id: String, done: (Result<JsonObject>) -> Unit) {
@@ -230,6 +234,132 @@ class AdminFlow(
     private fun allowInstalls() {
         close()
         activity.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${app.packageName}")))
+    }
+
+    // the whole hub to a zip in the drop folder and back from one there. secrets only go in
+    // sealed with a passphrase
+    private fun backup() = SettingsScreen.ActionSection(
+        "backup",
+        items = {
+            buildList {
+                add("save a backup" to ::saveBackup)
+                app.backups.dropped().firstOrNull()?.let { f -> add("restore ${f.name}" to { restoreBackup(f) }) }
+            }
+        },
+        info = { done ->
+            scope.launch {
+                val (folder, found) = withContext(Dispatchers.IO) { app.backups.folder() to app.backups.dropped() }
+                done(
+                    buildList {
+                        add(SettingsScreen.InfoRow("folder", folder?.path ?: "there's no storage to save to", bad = folder == null))
+                        add(SettingsScreen.InfoRow("secrets", "the pin, the ha token, the immich key, and what ha and dlna know this hub as"))
+                        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+                            add(SettingsScreen.InfoRow("restoring", "other apps can write to the folder on this android, restore from the web editor instead"))
+                        } else if (found.isEmpty()) {
+                            add(SettingsScreen.InfoRow("backups", "none in the folder"))
+                        } else {
+                            add(SettingsScreen.InfoRow("in the folder"))
+                            found.forEach { add(SettingsScreen.InfoRow("", it.name)) }
+                        }
+                    },
+                )
+            }
+        },
+    )
+
+    private fun saveBackup() {
+        val t = theme ?: return
+        val detail = "with secrets, they're sealed with a passphrase and can't be restored without it"
+        show(MenuView(activity, t, "save a backup", detail, listOf("without secrets", "with secrets", "back")) { i ->
+            when (i) {
+                0 -> writeBackup(null)
+                1 -> askPassphrase("passphrase, at least ${Backup.MIN_PASSPHRASE} characters", ::writeBackup)
+                else -> backToSettings()
+            }
+        })
+    }
+
+    // asked twice, a typo would seal the secrets for good
+    private fun askPassphrase(title: String, onPassphrase: (String) -> Unit) {
+        prompt(title, "next") { first ->
+            if (first.length < Backup.MIN_PASSPHRASE) {
+                askPassphrase("at least ${Backup.MIN_PASSPHRASE} characters, try again", onPassphrase)
+                return@prompt
+            }
+            prompt("the same passphrase again", "save") { second ->
+                if (second == first) onPassphrase(first) else askPassphrase("those didn't match, start again", onPassphrase)
+            }
+        }
+    }
+
+    private fun prompt(title: String, action: String, onText: (String) -> Unit) {
+        val t = theme ?: return
+        val view = TextPrompt(activity, t, title, onDone = { text ->
+            hideKeyboard()
+            onText(text)
+        }, onCancel = {
+            hideKeyboard()
+            backToSettings()
+        }, action = action, secret = true)
+        show(view, SETTINGS_IDLE_MS)
+        // posted, a prompt replacing the one that had focus loses it again as the old one goes
+        view.input.post {
+            view.input.requestFocus()
+            activity.getSystemService(InputMethodManager::class.java)?.showSoftInput(view.input, InputMethodManager.SHOW_IMPLICIT)
+        }
+    }
+
+    private fun writeBackup(passphrase: String?) {
+        val t = theme ?: return
+        show(MenuView(activity, t, "saving", "writing the backup", emptyList()) {})
+        scope.launch {
+            val result = withContext(Dispatchers.IO) { attempt { app.backups.save(passphrase) } }
+            val (title, detail) = result.fold(
+                { "saved" to "${it.name} is in ${it.parent}, copy it off with adb or a file manager" },
+                { "couldn't save" to (it.message ?: "the backup couldn't be written") },
+            )
+            show(MenuView(activity, t, title, detail, listOf("ok")) { backToSettings() })
+        }
+    }
+
+    private fun restoreBackup(file: File) {
+        val t = theme ?: return
+        scope.launch {
+            val read = withContext(Dispatchers.IO) { attempt { file.inputStream().use(app.backups::read) } }
+            val backup = read.getOrElse {
+                show(MenuView(activity, t, "can't restore", it.message ?: "the backup couldn't be read", listOf("ok")) { backToSettings() })
+                return@launch
+            }
+            val detail = "the dashboards, sources and settings here are replaced with the backup's, from ${backup.created.replace('T', ' ')}"
+            val options = if (backup.hasSecrets) listOf("restore with secrets", "restore without secrets", "back") else listOf("restore", "back")
+            show(MenuView(activity, t, "restore ${file.name}", detail, options) { i ->
+                when {
+                    i == options.lastIndex -> backToSettings()
+                    backup.hasSecrets && i == 0 -> prompt("the backup's passphrase", "restore") { applyRestore(backup, it) }
+                    else -> applyRestore(backup, null)
+                }
+            })
+        }
+    }
+
+    private fun applyRestore(backup: Backup.Contents, passphrase: String?) {
+        val t = theme ?: return
+        show(MenuView(activity, t, "restoring", "putting the backup in place", emptyList()) {})
+        scope.launch {
+            withContext(Dispatchers.IO) { attempt { app.backups.restore(backup, passphrase) } }.fold(
+                { onReload() },
+                { show(MenuView(activity, t, "couldn't restore", it.message ?: "the backup couldn't be put in place", listOf("ok")) { backToSettings() }) },
+            )
+        }
+    }
+
+    // the problems a backup can have, said on screen rather than crashing the hub
+    private inline fun <T> attempt(block: () -> T): Result<T> = try {
+        Result.success(block())
+    } catch (e: ConfigException) {
+        Result.failure(e)
+    } catch (e: IOException) {
+        Result.failure(e)
     }
 
     // newest first, the time beside each line

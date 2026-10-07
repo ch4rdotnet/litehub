@@ -4,10 +4,8 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.os.Handler
 import android.os.Looper
-import com.chardidathing.litehub.core.config.ConfigCodec
 import com.chardidathing.litehub.core.config.ConfigException
 import com.chardidathing.litehub.core.config.SettingsForm
-import com.chardidathing.litehub.core.config.Themes
 import com.chardidathing.litehub.core.model.Hex
 import com.chardidathing.litehub.core.model.SettingsSection
 import kotlinx.serialization.json.JsonObject
@@ -21,12 +19,14 @@ import com.chardidathing.litehub.webui.WebServer
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import java.io.ByteArrayOutputStream
+import java.util.Base64
 import java.io.File
 import java.io.IOException
 import java.lang.ref.WeakReference
@@ -85,13 +85,7 @@ class WebHost(private val app: LitehubApp) : HubAccess {
     }
 
     override fun saveConfig(text: String): Result<Unit> = validated {
-        val config = ConfigCodec.decode(text)
-        // themes are checked against the built in ones here, the codec doesn't know those
-        val themes = Themes(Presets.all, config.themes)
-        config.dashboards.forEach { d ->
-            themes[d.theme.light]
-            themes[d.theme.dark]
-        }
+        app.checkConfig(text)
         val file = File(app.filesDir, LitehubApp.CONFIG_FILE)
         file.writeAtomic(text)
         AppLog.add("config saved from the web editor")
@@ -120,6 +114,35 @@ class WebHost(private val app: LitehubApp) : HubAccess {
         AppLog.add("settings saved from the web editor")
         if (reload) onActivity { it.reload() }
     }
+
+    override fun backup(request: String): Result<ByteArray> = try {
+        val passphrase = passphrase(request)
+        Result.success(ByteArrayOutputStream().also { app.backups.write(passphrase, it) }.toByteArray())
+    } catch (e: ConfigException) {
+        Result.failure(e)
+    } catch (e: IOException) {
+        Result.failure(IOException("couldn't make the backup, ${e.message}", e))
+    }
+
+    override fun restore(request: String): Result<Unit> = validated {
+        val zip = (request(request)["zip"] as? JsonPrimitive)?.contentOrNull
+            ?.let { runCatching { Base64.getDecoder().decode(it) }.getOrNull() }
+            ?: throw ConfigException("pick a backup to restore")
+        val backup = app.backups.read(zip.inputStream())
+        app.backups.restore(backup, passphrase(request))
+        onActivity { it.reload() }
+    }
+
+    // {"passphrase": "..."} with the secrets, leaving it out leaves them out. a blank one is a
+    // mistake, not a choice, so it's refused rather than quietly dropping the secrets
+    private fun passphrase(request: String): String? {
+        val o = request(request)
+        if ("passphrase" !in o) return null
+        return (o["passphrase"] as? JsonPrimitive)?.contentOrNull?.ifEmpty { null } ?: throw ConfigException("the passphrase is empty")
+    }
+
+    private fun request(text: String) = runCatching { Json.parseToJsonElement(text) }.getOrNull() as? JsonObject
+        ?: throw ConfigException("expected a json object")
 
     override suspend fun settingsAction(id: String): Result<String> = app.settingsAction(id).map { it.toString() }
 
