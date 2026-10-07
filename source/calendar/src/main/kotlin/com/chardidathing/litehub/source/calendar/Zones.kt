@@ -75,7 +75,7 @@ internal class Zones(vtimezones: List<Component>, val device: ZoneId) {
         val start = c.first("DTSTART")?.let { IcsTime.parse(it).firstOrNull() } ?: return null
         val parts = c.first("RRULE")?.value?.split(';')?.associate { it.substringBefore('=').uppercase() to it.substringAfter('=') }
             ?: return null
-        val month = parts["BYMONTH"]?.toIntOrNull()?.let(Month::of) ?: return null
+        val month = parts["BYMONTH"]?.toIntOrNull()?.takeIf { it in MONTHS }?.let(Month::of) ?: return null
         val byDay = parts["BYDAY"] ?: return null
         val dow = DAYS[byDay.takeLast(2).uppercase()] ?: return null
         val n = byDay.dropLast(2).ifEmpty { "1" }.toIntOrNull() ?: return null
@@ -85,6 +85,7 @@ internal class Zones(vtimezones: List<Component>, val device: ZoneId) {
     }
 
     companion object {
+        private val MONTHS = 1..12
         private val DAYS = mapOf(
             "MO" to DayOfWeek.MONDAY, "TU" to DayOfWeek.TUESDAY, "WE" to DayOfWeek.WEDNESDAY,
             "TH" to DayOfWeek.THURSDAY, "FR" to DayOfWeek.FRIDAY, "SA" to DayOfWeek.SATURDAY, "SU" to DayOfWeek.SUNDAY,

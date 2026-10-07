@@ -95,4 +95,35 @@ class IcsCalendarTest {
         val events = IcsCalendar.parse(StringReader(text), "test", adelaide, from, until)
         assertEquals(listOf("ok"), events.map { it.title })
     }
+
+    @Test
+    fun `durations too long or too big are no duration, not a crash`() {
+        assertEquals(null to null, IcsEvent.parseDuration("PT9999999999999999H"))
+        assertEquals(null to null, IcsEvent.parseDuration("P" + "9".repeat(100_000)))
+        assertEquals(null to null, IcsEvent.parseDuration("PT99999999999999999999999H"))
+        assertEquals(java.time.Duration.ofMinutes(90) to java.time.Period.ZERO, IcsEvent.parseDuration("PT1H30M"))
+    }
+
+    @Test
+    fun `a timezone rule for month 13 is skipped, the calendar still reads`() {
+        val ics = """BEGIN:VCALENDAR
+BEGIN:VTIMEZONE
+TZID:Odd
+BEGIN:STANDARD
+DTSTART:19700101T030000
+TZOFFSETFROM:+1100
+TZOFFSETTO:+1000
+RRULE:FREQ=YEARLY;BYMONTH=13;BYDAY=1SU
+END:STANDARD
+END:VTIMEZONE
+BEGIN:VEVENT
+UID:a
+DTSTART;TZID=Odd:20261105T090000
+SUMMARY:still here
+END:VEVENT
+END:VCALENDAR
+"""
+        val events = IcsCalendar.parse(StringReader(ics), "cal", adelaide, from, until)
+        assertEquals("still here", events.single().title)
+    }
 }

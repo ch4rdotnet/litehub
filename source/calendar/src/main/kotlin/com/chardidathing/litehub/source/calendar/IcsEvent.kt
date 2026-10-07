@@ -20,6 +20,10 @@ internal class IcsEvent(
 ) {
 
     companion object {
+        // the longest real duration ("-P52W6DT23H59M59S") is well under this
+        private const val MAX_DURATION_CHARS = 32
+        private const val DAYS_PER_WEEK = 7L
+
         fun from(c: Component): IcsEvent? {
             val start = c.first("DTSTART")?.let { IcsTime.parse(it).firstOrNull() } ?: return null
             val (duration, days) = c.first("DURATION")?.value?.let(::parseDuration) ?: (null to null)
@@ -41,8 +45,20 @@ internal class IcsEvent(
         }
 
         // "P1W", "P2D", "PT1H30M", "-PT15M". days come back as a Period so they follow the
-        // calendar across dst, time parts as an exact Duration
+        // calendar across dst, time parts as an exact Duration. anything too long or too big to
+        // be a real duration is no duration, it comes from someone else's server
         fun parseDuration(raw: String): Pair<Duration?, Period?> {
+            if (raw.length > MAX_DURATION_CHARS) return null to null
+            return try {
+                parseBounded(raw)
+            } catch (e: ArithmeticException) {
+                null to null
+            } catch (e: NumberFormatException) {
+                null to null
+            }
+        }
+
+        private fun parseBounded(raw: String): Pair<Duration?, Period?> {
             val v = raw.trim().uppercase()
             val negative = v.startsWith("-")
             val body = v.removePrefix("-").removePrefix("+").removePrefix("P")
@@ -65,7 +81,7 @@ internal class IcsEvent(
                 }
             }
             val sign = if (negative) -1 else 1
-            val period = Period.ofDays(((weeks * 7 + dayCount) * sign).toInt())
+            val period = Period.ofDays(Math.toIntExact(Math.addExact(Math.multiplyExact(weeks, DAYS_PER_WEEK), dayCount) * sign))
             return time.multipliedBy(sign.toLong()) to period
         }
     }

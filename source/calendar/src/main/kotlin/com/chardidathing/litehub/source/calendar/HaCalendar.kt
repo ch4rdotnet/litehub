@@ -7,11 +7,11 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.put
+import java.time.DateTimeException
 import java.time.Instant
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
-import java.time.format.DateTimeParseException
 
 // ha's calendar.get_events, which hands back occurrences already expanded
 internal object HaCalendar {
@@ -40,7 +40,10 @@ internal object HaCalendar {
                     val en = OffsetDateTime.parse(end).toInstant().toEpochMilli().coerceAtLeast(s)
                     CalendarEvent(source, id, title, e.string("location"), false, s, en)
                 }
-            } catch (ex: DateTimeParseException) {
+            } catch (ex: DateTimeException) {
+                null
+            } catch (ex: ArithmeticException) {
+                // a date outside what epoch millis can hold
                 null
             }
         }
