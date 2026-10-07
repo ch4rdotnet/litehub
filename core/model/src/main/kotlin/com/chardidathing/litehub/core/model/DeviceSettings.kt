@@ -18,7 +18,29 @@ data class DeviceSettings(
     val dlna: DlnaSettings = DlnaSettings(),
     val notifications: NotificationSettings = NotificationSettings(),
     val reporting: ReportingSettings = ReportingSettings(),
+    val launcher: LauncherSettings = LauncherSettings(),
 )
+
+// the optional app drawer, off until turned on. apps are kept by key (the package, with the
+// profile after an @ for work apps). hidden ones stay out of the drawer, locked ones ask for
+// the pin first. comeBack brings the dashboard back on its own after comeBackMinutes
+@Serializable
+data class LauncherSettings(
+    val enabled: Boolean = false,
+    val hidden: List<String> = emptyList(),
+    val locked: List<String> = emptyList(),
+    val comeBack: ComeBack = ComeBack.OFF,
+    val comeBackMinutes: Int = 10,
+)
+
+// untouched needs litehub's accessibility service on, it's the only way android tells another
+// app about touches in an app
+@Serializable
+enum class ComeBack {
+    @SerialName("off") OFF,
+    @SerialName("opened") OPENED,
+    @SerialName("untouched") UNTOUCHED,
+}
 
 // the banners in the top right and the list behind the shade
 @Serializable

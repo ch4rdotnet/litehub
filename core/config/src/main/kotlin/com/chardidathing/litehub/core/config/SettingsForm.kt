@@ -1,6 +1,7 @@
 package com.chardidathing.litehub.core.config
 
 import com.chardidathing.litehub.core.model.CalendarSource
+import com.chardidathing.litehub.core.model.ComeBack
 import com.chardidathing.litehub.core.model.Choice
 import com.chardidathing.litehub.core.model.DeviceSettings
 import com.chardidathing.litehub.core.model.FeedSource
@@ -45,6 +46,7 @@ object SettingsForm {
     private const val NIGHT = "night.enabled"
     private const val LOCATION = "location.set"
     private const val WEATHER = "screensaver.weather"
+    private const val APPS = "launcher.enabled"
     const val CALENDARS = "calendars"
     const val FEEDS = "feeds"
 
@@ -173,6 +175,23 @@ object SettingsForm {
             actions = listOf(Choice(HA_HOME, "use home assistant's home")),
         ),
         SettingsSection(
+            "apps",
+            "apps",
+            listOf(
+                toggle(APPS, "app drawer, swipe up from the bottom edge"),
+                SchemaField(
+                    "launcher.comeBack", "back to the dashboard on its own", FieldKind.CHOICE,
+                    options = listOf(
+                        Choice("off", "never"),
+                        Choice("opened", "a while after an app opens"),
+                        Choice("untouched", "a while after the last touch in an app"),
+                    ),
+                    showIf = mapOf(APPS to "true"),
+                ),
+                number("launcher.comeBackMinutes", "after (minutes)", 1, 1440, mapOf(APPS to "true")),
+            ),
+        ),
+        SettingsSection(
             "web",
             "web",
             listOf(
@@ -251,6 +270,9 @@ object SettingsForm {
                 LOCATION to JsonPrimitive(location != null),
                 "location.latitude" to JsonPrimitive(location?.latitude ?: 0.0),
                 "location.longitude" to JsonPrimitive(location?.longitude ?: 0.0),
+                APPS to JsonPrimitive(s.launcher.enabled),
+                "launcher.comeBack" to JsonPrimitive(s.launcher.comeBack.name.lowercase(Locale.ROOT)),
+                "launcher.comeBackMinutes" to JsonPrimitive(s.launcher.comeBackMinutes),
                 "web.editor" to JsonPrimitive(s.web.editor),
                 "web.status" to JsonPrimitive(s.web.status),
                 "web.port" to JsonPrimitive(s.web.port),
@@ -410,6 +432,12 @@ object SettingsForm {
             reporting = s.reporting.copy(
                 heartbeatMinutes = v.int("reporting.heartbeatMinutes"),
                 interactionSeconds = v.int("reporting.interactionSeconds"),
+            ),
+            // which apps are hidden or locked is set from the drawer, not here
+            launcher = s.launcher.copy(
+                enabled = v.bool(APPS),
+                comeBack = ComeBack.entries.first { it.name.lowercase(Locale.ROOT) == v.text("launcher.comeBack") },
+                comeBackMinutes = v.int("launcher.comeBackMinutes"),
             ),
             web = s.web.copy(editor = v.bool("web.editor"), status = v.bool("web.status"), port = v.int("web.port")),
             // the uuid is made the first time it's turned on and kept, ha knows the renderer by it

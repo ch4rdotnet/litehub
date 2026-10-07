@@ -47,6 +47,17 @@ class SettingsFormTest {
     }
 
     @Test
+    fun `the drawer's settings keep its app lists`() {
+        val h = hub.copy(device = device.copy(launcher = device.launcher.copy(hidden = listOf("com.a"), locked = listOf("com.b"))))
+        val l = apply(h, "launcher.enabled" to true, "launcher.comeBack" to "untouched", "launcher.comeBackMinutes" to 5).device.launcher
+        assertTrue(l.enabled)
+        assertEquals(com.chardidathing.litehub.core.model.ComeBack.UNTOUCHED, l.comeBack)
+        assertEquals(5, l.comeBackMinutes)
+        assertEquals(listOf("com.a"), l.hidden)
+        assertEquals(listOf("com.b"), l.locked)
+    }
+
+    @Test
     fun `edits land in the nested settings`() {
         val s = apply(
             hub,
