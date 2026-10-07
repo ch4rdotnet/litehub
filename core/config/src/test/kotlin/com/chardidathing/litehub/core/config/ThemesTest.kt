@@ -69,4 +69,11 @@ class ThemesTest {
     private fun failure(block: () -> Unit): ConfigException =
         runCatching(block).exceptionOrNull() as? ConfigException
             ?: throw AssertionError("expected a ConfigException")
+
+    @Test
+    fun `a chain of themes built to overflow is refused`() {
+        val chain = (0 until 30).map { i -> Fixtures.obj("""{"id":"t$i","extends":"${if (i == 29) "base" else "t${i + 1}"}"}""") }
+        val e = org.junit.Assert.assertThrows(ConfigException::class.java) { Themes(listOf(base), chain) }
+        assertTrue(e.message!!.contains("builds on more than"))
+    }
 }

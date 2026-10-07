@@ -16,6 +16,7 @@ class Themes(presets: List<Theme>, user: List<JsonObject>) {
     init {
         val resolved = LinkedHashMap<String, Theme>()
         presets.forEach { resolved[it.id] = it }
+        if (user.size > MAX_THEMES) throw ConfigException("there are more than $MAX_THEMES themes")
         val pending = user.associateBy { it.string("id") ?: throw ConfigException("a theme is missing its id") }
         if (pending.size != user.size) throw ConfigException("two themes share an id")
         pending.keys.forEach { resolve(it, pending, resolved, mutableSetOf()) }
@@ -43,6 +44,8 @@ class Themes(presets: List<Theme>, user: List<JsonObject>) {
         resolved[id]?.let { return it }
         val overrides = pending.getValue(id)
         if (!visiting.add(id)) throw ConfigException("theme \"$id\" extends itself")
+        // resolving recurses once per link, a chain this long is a config made to overflow it
+        if (visiting.size > MAX_CHAIN) throw ConfigException("theme \"$id\" builds on more than $MAX_CHAIN other themes")
         val parentId = overrides.string("extends") ?: throw ConfigException("theme \"$id\" needs an extends")
         val parent = when {
             parentId in pending -> resolve(parentId, pending, resolved, visiting)
@@ -74,4 +77,9 @@ class Themes(presets: List<Theme>, user: List<JsonObject>) {
 
     private fun JsonObject.string(key: String): String? =
         (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull
+
+    private companion object {
+        const val MAX_THEMES = 64
+        const val MAX_CHAIN = 16
+    }
 }
