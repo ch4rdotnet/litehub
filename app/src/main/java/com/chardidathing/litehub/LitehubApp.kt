@@ -4,6 +4,7 @@ import android.app.Application
 import android.os.Build
 import com.chardidathing.litehub.core.config.ConfigException
 import com.chardidathing.litehub.core.config.HubSettings
+import com.chardidathing.litehub.core.config.PinThrottle
 import com.chardidathing.litehub.core.config.SavedSettings
 import com.chardidathing.litehub.core.config.SettingsCodec
 import com.chardidathing.litehub.core.config.SettingsForm
@@ -67,6 +68,9 @@ class LitehubApp : Application() {
     val dlna by lazy { DlnaHost(this) }
 
     val status by lazy { HubStatus(this) }
+
+    // wrong pin guesses, counted across the device's pin pad and the web login together
+    val pinThrottle = PinThrottle()
 
     // what's on screen, for the status page
     data class HubState(val dashboard: String = "", val page: Int = 1, val screenOn: Boolean = true)

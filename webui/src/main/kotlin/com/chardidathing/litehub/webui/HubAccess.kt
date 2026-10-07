@@ -1,5 +1,7 @@
 package com.chardidathing.litehub.webui
 
+import com.chardidathing.litehub.core.config.PinThrottle
+
 // what the web server may read and change on the hub, the app implements it. texts are json
 interface HubAccess {
     val editorEnabled: Boolean
@@ -28,6 +30,9 @@ interface HubAccess {
 
     // the built in themes, fully filled in, so the theme editor can show what a theme inherits
     fun presetThemes(): String
+
+    // the same cooldown the device's own pin pad counts against
+    val pinThrottle: PinThrottle
 
     fun schemas(): String
 

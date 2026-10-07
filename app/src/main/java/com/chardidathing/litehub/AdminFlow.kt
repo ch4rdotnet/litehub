@@ -64,9 +64,19 @@ class AdminFlow(
         val t = theme ?: return
         lateinit var pad: PinPadView
         pad = PinPadView(activity, t, "enter pin", onEnter = { pin ->
+            val throttle = app.pinThrottle
+            if (!throttle.begin()) {
+                pad.say("too many wrong pins, try again in ${throttle.waitSeconds()} seconds", error = true)
+                return@PinPadView
+            }
             scope.launch {
                 val ok = withContext(Dispatchers.Default) { Pin.matches(pin, stored) }
-                if (ok) menu() else pad.say("wrong pin", error = true)
+                if (ok) {
+                    throttle.succeeded()
+                    menu()
+                } else {
+                    pad.say("wrong pin", error = true)
+                }
             }
         }, onCancel = ::close)
         show(pad)

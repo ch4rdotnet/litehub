@@ -77,6 +77,7 @@ class WebHost(private val app: LitehubApp) : HubAccess {
     override val editorEnabled get() = app.settings.web.editor
     override val statusEnabled get() = app.settings.web.status
     override val pinHash get() = app.settings.pin
+    override val pinThrottle get() = app.pinThrottle
 
     override fun config(): String {
         val file = File(app.filesDir, LitehubApp.CONFIG_FILE)

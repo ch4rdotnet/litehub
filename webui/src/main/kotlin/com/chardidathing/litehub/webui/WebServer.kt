@@ -28,8 +28,6 @@ class WebServer(port: Int, private val access: HubAccess, private val assets: As
 
     private val sessions = HashSet<String>()
     private val random = SecureRandom()
-    private var failures = 0
-    private var lockedUntil = 0L
 
     private fun handle(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response = try {
         if (!onLan(session.remoteIpAddress)) text(NanoHTTPD.Response.Status.FORBIDDEN, "litehub only answers on the local network")
@@ -82,17 +80,13 @@ class WebServer(port: Int, private val access: HubAccess, private val assets: As
 
     private fun login(s: NanoHTTPD.IHTTPSession): NanoHTTPD.Response {
         val stored = access.pinHash ?: return session(text(NanoHTTPD.Response.Status.OK, "no pin set"))
-        val now = System.currentTimeMillis()
-        if (now < lockedUntil) return text(NanoHTTPD.Response.Status.TOO_MANY_REQUESTS, "too many wrong pins, wait a minute")
-        val pin = body(s).trim()
-        if (!Pin.matches(pin, stored)) {
-            if (++failures >= MAX_FAILURES) {
-                failures = 0
-                lockedUntil = now + LOCKOUT_MS
-            }
-            return text(NanoHTTPD.Response.Status.UNAUTHORIZED, "wrong pin")
+        val throttle = access.pinThrottle
+        if (!throttle.begin()) {
+            return text(NanoHTTPD.Response.Status.TOO_MANY_REQUESTS, "too many wrong pins, try again in ${throttle.waitSeconds()} seconds")
         }
-        failures = 0
+        val pin = body(s).trim()
+        if (!Pin.matches(pin, stored)) return text(NanoHTTPD.Response.Status.UNAUTHORIZED, "wrong pin")
+        throttle.succeeded()
         return session(text(NanoHTTPD.Response.Status.OK, "ok"))
     }
 
@@ -155,8 +149,6 @@ class WebServer(port: Int, private val access: HubAccess, private val assets: As
         const val SOCKET_TIMEOUT_MS = 10_000
         const val COOKIE = "litehub_session"
         const val TOKEN_BYTES = 24
-        const val MAX_FAILURES = 5
-        const val LOCKOUT_MS = 60_000L
         const val MAX_BODY = 1 shl 20
     }
 }
