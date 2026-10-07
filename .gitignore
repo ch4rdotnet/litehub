@@ -42,9 +42,11 @@ misc.xml
 deploymentTargetDropDown.xml
 render.experimental.xml
 
-# Keystore files
+# Keystore files, and anything they could be carried in
 *.jks
 *.keystore
+keystore.properties
+*.b64
 
 # Google Services (e.g. APIs or Firebase)
 google-services.json
