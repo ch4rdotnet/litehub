@@ -76,6 +76,10 @@ class LitehubApp : Application() {
 
     val backups by lazy { Backups(this) }
 
+    val apps by lazy { com.chardidathing.litehub.ui.launcher.Apps(this) }
+
+    val appReturn by lazy { AppReturn(this) }
+
     // wrong pin guesses, counted across the device's pin pad and the web login together
     val pinThrottle = PinThrottle()
 

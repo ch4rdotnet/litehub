@@ -85,6 +85,14 @@ object WidgetSchemas {
             listOf(SchemaField("seconds", "seconds per photo (blank uses the screensaver's)", FieldKind.NUMBER, min = MIN_PHOTO_SECONDS.toDouble())),
             description = "the screensaver's photos in a tile, one fading into the next",
         ),
+        WidgetSchema(
+            "app", "app", 1, 1,
+            listOf(
+                SchemaField("app", "app", FieldKind.APP, required = true),
+                SchemaField("name", "name", FieldKind.TEXT),
+            ),
+            description = "an app's icon and name, tap to open it",
+        ),
         WidgetSchema("notifications", "notifications", 1, 2, listOf(SchemaField("title", "title", FieldKind.TEXT)), description = "what home assistant has sent, tap one to clear it"),
         WidgetSchema("placeholder", "placeholder", 1, 1, listOf(SchemaField("title", "title", FieldKind.TEXT)), description = "an empty tile to hold a space"),
     )

@@ -28,6 +28,7 @@ class SettingsSheet(
 
     interface Host {
         fun pickEntity(domains: List<String>, onPicked: (String) -> Unit)
+        fun pickApp(onPicked: (String) -> Unit)
         fun save(settings: JsonObject)
         fun remove()
         fun cancel()
@@ -45,7 +46,7 @@ class SettingsSheet(
         column.setPadding(side, side, side, side)
         addView(column, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         column.addView(TextView(context).styled(theme.type.h5, theme.colors.onBackground).apply { text = schema.name })
-        column.addView(FieldForm(context, theme, schema.fields, values, legend, host::pickEntity))
+        column.addView(FieldForm(context, theme, schema.fields, values, legend, host::pickEntity, host::pickApp))
         column.addView(space(gap))
         column.addView(problem)
         column.addView(space(gap))

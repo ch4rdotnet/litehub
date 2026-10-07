@@ -71,4 +71,6 @@ enum class FieldKind {
     @SerialName("secret") SECRET,
     // "#rrggbb", blank for automatic
     @SerialName("color") COLOR,
+    // an app's key from the drawer, the package name for most
+    @SerialName("app") APP,
 }

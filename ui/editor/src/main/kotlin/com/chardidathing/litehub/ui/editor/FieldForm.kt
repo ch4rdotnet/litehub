@@ -35,6 +35,8 @@ class FieldForm(
     private val values: MutableMap<String, JsonElement>,
     private val legend: Legend?,
     private val pickEntity: (domains: List<String>, onPicked: (String) -> Unit) -> Unit,
+    // only widget settings have app fields, the hub's own settings don't
+    private val pickApp: ((onPicked: (String) -> Unit) -> Unit)? = null,
 ) : LinearLayout(context) {
 
     private val rows = HashMap<String, View>()
@@ -67,6 +69,7 @@ class FieldForm(
         FieldKind.TOGGLE -> toggle(field)
         FieldKind.CHOICE -> choice(field)
         FieldKind.ENTITY -> entity(field)
+        FieldKind.APP -> pickApp?.let { app(field, it) } ?: input(field)
         FieldKind.ENTITIES -> entities(field)
         FieldKind.COLOR -> color(field)
         FieldKind.CALENDARS -> sources(field, legend?.calendars.orEmpty())
@@ -193,6 +196,19 @@ class FieldForm(
         button = ButtonView(context, theme, label()) {
             pickEntity(field.domains) { id ->
                 values[field.key] = JsonPrimitive(id)
+                button.label = label()
+                button.requestLayout()
+            }
+        }
+        return button
+    }
+
+    private fun app(field: SchemaField, pick: (onPicked: (String) -> Unit) -> Unit): ButtonView {
+        lateinit var button: ButtonView
+        fun label() = text(field.key) ?: "pick an app"
+        button = ButtonView(context, theme, label()) {
+            pick { key ->
+                values[field.key] = JsonPrimitive(key)
                 button.label = label()
                 button.requestLayout()
             }

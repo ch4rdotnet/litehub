@@ -61,6 +61,8 @@ object WidgetCatalog {
                 ?: broken(context, theme, "clock config isn't valid", "it only takes whether to show the date")
             "photo" -> decode(placement, PhotoConfig.serializer())?.let { PhotoWidget(context, theme, it) }
                 ?: broken(context, theme, "photo frame config isn't valid", "it only takes seconds per photo")
+            "app" -> decode(placement, AppConfig.serializer())?.let { AppWidget(context, theme, it) }
+                ?: broken(context, theme, "app config isn't valid", "it needs an app")
             "notifications" -> decode(placement, NotificationsConfig.serializer())?.let { NotificationsWidget(context, theme, it) }
                 ?: broken(context, theme, "notifications config isn't valid", "it only takes a title")
             // shown as a failure, not dropped, so a typo in the config is visible on screen

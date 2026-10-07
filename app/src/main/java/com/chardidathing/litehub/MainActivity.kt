@@ -72,6 +72,7 @@ class MainActivity : Activity() {
     private lateinit var admin: AdminFlow
     private lateinit var editor: EditorFlow
     private lateinit var companion: CompanionBridge
+    private lateinit var launcher: LauncherFlow
     private var screenOff: View? = null
     private var notices: NoticeStack? = null
     private var tts: TextToSpeech? = null
@@ -89,9 +90,11 @@ class MainActivity : Activity() {
         setContentView(root)
         // after setContentView, the insets controller needs the decor view to exist
         Kiosk.immerse(window)
-        editor = EditorFlow(this, app, root, scope, onSaved = ::load)
+        val pins = PinGate(this, app, scope)
+        launcher = LauncherFlow(this, app, root, scope, pins)
+        editor = EditorFlow(this, app, root, scope, onSaved = ::load, launcher = launcher)
         companion = CompanionBridge(app, scope, Commands())
-        admin = AdminFlow(this, app, root, scope, onReload = ::reload, onEdit = ::edit, companion = companion)
+        admin = AdminFlow(this, app, root, scope, onReload = ::reload, onEdit = ::edit, companion = companion, pins = pins)
         app.web.attach(this)
         // a panel turned off by device admin comes back on to this, over the keyguard
         setShowWhenLocked(true)
@@ -118,6 +121,7 @@ class MainActivity : Activity() {
     override fun onBackPressed() {
         when {
             controls != null -> closeControls()
+            launcher.isOpen -> launcher.close()
             shade != null -> shade?.close()
             prompt != null -> closePrompt()
             editor.isOpen -> editor.back()
@@ -129,6 +133,7 @@ class MainActivity : Activity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         closeControls()
+        launcher.close()
         admin.close()
         editor.close()
     }
@@ -136,6 +141,7 @@ class MainActivity : Activity() {
     override fun onStart() {
         super.onStart()
         started = true
+        app.appReturn.back()
         ticker.start()
         if (firstFrameDone) companion.start()
         app.screensaver.display = ScreenDisplay()
@@ -233,6 +239,7 @@ class MainActivity : Activity() {
             if (saver != null) return
             // nobody's at the screen, so nothing pin protected stays open under the screensaver
             closeControls()
+            launcher.close()
             admin.close()
             editor.close()
             val view = ScreensaverView(this@MainActivity, theme)
@@ -390,21 +397,52 @@ class MainActivity : Activity() {
         view.show(title, s.track?.artist, playing = s.transport == Transport.PLAYING)
     }
 
-    // a finger that starts on the top edge and pulls down opens the shade instead of touching the page
+    // a finger that starts on the top edge and pulls down opens the shade instead of touching the
+    // page, one on the bottom edge pushing up opens the app drawer when it's turned on
     private fun watchEdge(ev: MotionEvent): Boolean {
         val theme = this.theme ?: return false
         when (ev.actionMasked) {
-            MotionEvent.ACTION_DOWN -> edgeDownY = if (ev.y < theme.spacing.xl && shade == null) ev.y else -1f
-            MotionEvent.ACTION_MOVE -> if (edgeDownY >= 0 && ev.y - edgeDownY > theme.touchTarget) {
-                edgeDownY = -1f
-                // the page already saw the start of the touch, tell it the gesture is over
-                super.dispatchTouchEvent(MotionEvent.obtain(ev).apply { action = MotionEvent.ACTION_CANCEL })
-                openShade()
-                return true
+            MotionEvent.ACTION_DOWN -> {
+                edgeDownY = if (ev.y < theme.spacing.xl && shade == null) ev.y else -1f
+                val bottom = ev.y > window.decorView.height - theme.spacing.xl
+                edgeUpY = if (bottom && app.settings.launcher.enabled && dashboardOnTop()) ev.y else -1f
             }
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> edgeDownY = -1f
+            MotionEvent.ACTION_MOVE -> {
+                if (edgeDownY >= 0 && ev.y - edgeDownY > theme.touchTarget) {
+                    edgeDownY = -1f
+                    cancelPage(ev)
+                    openShade()
+                    return true
+                }
+                if (edgeUpY >= 0 && edgeUpY - ev.y > theme.touchTarget) {
+                    edgeUpY = -1f
+                    cancelPage(ev)
+                    launcher.open(theme)
+                    return true
+                }
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                edgeDownY = -1f
+                edgeUpY = -1f
+            }
         }
         return false
+    }
+
+    // the page already saw the start of the touch, tell it the gesture is over
+    private fun cancelPage(ev: MotionEvent) {
+        super.dispatchTouchEvent(MotionEvent.obtain(ev).apply { action = MotionEvent.ACTION_CANCEL })
+    }
+
+    private var edgeUpY = -1f
+
+    // nothing over the dashboard but maybe a notice
+    private fun dashboardOnTop() = ready != null && shade == null && controls == null && prompt == null && saver == null &&
+        !admin.isOpen && !editor.isOpen && !launcher.isOpen
+
+    private fun openApp(key: String) {
+        val theme = this.theme ?: return
+        launcher.launch(theme, key)
     }
 
     // ha asked for another dashboard, it sticks like a choice made on the device would
@@ -512,6 +550,7 @@ class MainActivity : Activity() {
         binder = null
         pager = null
         closeControls()
+        launcher.close()
         // the window background is the dashboard background, so nothing else has to paint it
         window.setBackgroundDrawable(ColorDrawable(theme.colors.background))
         val view = when (screen) {
@@ -526,7 +565,7 @@ class MainActivity : Activity() {
                     widgets += made
                     view
                 }
-                val b = DashboardBinder(app.ha, app.calendars, app.feeds, app.weather, ::askText, ::openControls, app.notifications, app::photoFrame, { app.settings.screensaver.photoSeconds }, ticker.now, widgets, scope)
+                val b = DashboardBinder(app.ha, app.calendars, app.feeds, app.weather, ::askText, ::openControls, app.apps, ::openApp, app.notifications, app::photoFrame, { app.settings.screensaver.photoSeconds }, ticker.now, widgets, scope)
                 binder = b
                 PagerView(this, theme, pages).also {
                     pager = it

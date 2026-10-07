@@ -30,6 +30,8 @@ class EditorFlow(
     private val container: FrameLayout,
     private val scope: CoroutineScope,
     private val onSaved: () -> Unit,
+    // the drawer's grid, for picking an app tile's app
+    private val launcher: LauncherFlow,
 ) {
 
     private val stack = ArrayList<View>()
@@ -82,6 +84,17 @@ class EditorFlow(
         val schema = WidgetSchemas.of(placement.type) ?: return
         push(SettingsSheet(activity, theme, schema, placement.config, legend, object : SettingsSheet.Host {
             override fun pickEntity(domains: List<String>, onPicked: (String) -> Unit) = pick(theme, domains, onPicked)
+            override fun pickApp(onPicked: (String) -> Unit) {
+                hideKeyboard()
+                push(launcher.picker(theme, onPicked = { key ->
+                    hideKeyboard()
+                    pop()
+                    onPicked(key)
+                }, onCancel = {
+                    hideKeyboard()
+                    pop()
+                }))
+            }
             override fun save(settings: JsonObject) {
                 hideKeyboard()
                 pop()

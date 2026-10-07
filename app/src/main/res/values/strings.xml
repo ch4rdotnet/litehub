@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">litehub</string>
+    <string name="touch_watch">lets litehub notice when an app it opened has been left untouched, so the dashboard can come back. it only notices that something was touched, never what\'s on screen.</string>
 </resources>

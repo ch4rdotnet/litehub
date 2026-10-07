@@ -4,6 +4,8 @@ import com.chardidathing.litehub.source.calendar.CalendarRepository
 import com.chardidathing.litehub.source.feed.FeedRepository
 import com.chardidathing.litehub.source.ha.EntityRepository
 import com.chardidathing.litehub.ui.components.WidgetView
+import com.chardidathing.litehub.ui.launcher.Apps
+import com.chardidathing.litehub.ui.widgets.AppWidget
 import com.chardidathing.litehub.ui.widgets.CalendarWidget
 import com.chardidathing.litehub.ui.widgets.EntityWidget
 import com.chardidathing.litehub.ui.widgets.EntitiesWidget
@@ -17,6 +19,8 @@ import com.chardidathing.litehub.ui.widgets.TodoWidget
 import com.chardidathing.litehub.ui.widgets.WeatherWidget
 import com.chardidathing.litehub.source.weather.WeatherRepository
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -35,6 +39,9 @@ class DashboardBinder(
     private val askText: (title: String, onText: (String) -> Unit) -> Unit,
     // a held light opens its controls over the dashboard, the activity owns that too
     private val openControls: (entity: String) -> Unit,
+    private val apps: Apps,
+    // an app tile opens through the drawer's flow, a locked app asks for the pin first
+    private val openApp: (key: String) -> Unit,
     private val notifications: NotificationCenter,
     // a fresh frame per photo tile, each keeps its own shuffled queue
     private val photoFrame: () -> Result<PhotoFrame>,
@@ -58,6 +65,9 @@ class DashboardBinder(
             group.onTap = { id -> scope.launch { ha.toggle(id) } }
             group.canHold = LightControls::supports
             group.onHold = openControls
+        }
+        for (tile in pages.flatten().filterIsInstance<AppWidget>()) {
+            tile.onTap = { openApp(tile.config.app) }
         }
         for (panel in pages.flatten().filterIsInstance<NotificationsWidget>()) {
             panel.onRemove = notifications::remove
@@ -108,6 +118,11 @@ class DashboardBinder(
             for (id in widget.config.entities.distinct()) launch { ha.snapshot(id).collect { widget.show(id, it) } }
         }
         is ClockWidget -> scope.launch { now.collect(widget::show) }
+        is AppWidget -> scope.launch {
+            val key = widget.config.app
+            val (label, icon) = withContext(Dispatchers.IO) { apps.label(key) to apps.icon(key, widget.iconSize) }
+            widget.show(label, icon)
+        }
         is PhotoWidget -> scope.launch {
             val frame = photoFrame().getOrElse {
                 widget.fail(it.message ?: "no photos")

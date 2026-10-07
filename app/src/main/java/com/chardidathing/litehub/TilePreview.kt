@@ -133,7 +133,7 @@ class TilePreview(private val app: LitehubApp) {
                 if (photo != null) widget.show(photo) else widget.note("photos show here on the hub")
             } else {
                 val binder = DashboardBinder(
-                    app.ha, app.calendars, app.feeds, app.weather, { _, _ -> }, {}, app.notifications,
+                    app.ha, app.calendars, app.feeds, app.weather, { _, _ -> }, {}, app.apps, {}, app.notifications,
                     app::photoFrame, { app.settings.screensaver.photoSeconds }, a.now, listOf(listOf(widget)), scope,
                 )
                 binder.preview(widget)

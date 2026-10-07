@@ -14,6 +14,7 @@ import com.chardidathing.litehub.core.config.ConfigException
 import com.chardidathing.litehub.core.config.HubSettings
 import com.chardidathing.litehub.core.config.Pin
 import com.chardidathing.litehub.core.config.SettingsForm
+import com.chardidathing.litehub.core.model.ComeBack
 import com.chardidathing.litehub.ui.components.MenuView
 import com.chardidathing.litehub.ui.components.PinPadView
 import com.chardidathing.litehub.ui.editor.EntityPicker
@@ -40,6 +41,7 @@ class AdminFlow(
     private val onReload: () -> Unit,
     private val onEdit: () -> Unit,
     private val companion: CompanionBridge,
+    private val pins: PinGate,
 ) {
 
     private var overlay: View? = null
@@ -61,8 +63,8 @@ class AdminFlow(
     fun open(theme: ResolvedTheme) {
         this.theme = theme
         live = true
-        val stored = app.settings.pin
-        if (stored == null) menu() else askPin(stored)
+        val pad = pins.pad(theme, "enter pin", onOk = ::menu, onCancel = ::close) ?: return menu()
+        show(pad)
     }
 
     fun close() {
@@ -72,28 +74,6 @@ class AdminFlow(
         overlay?.let(container::removeView)
         overlay = null
         screen = null
-    }
-
-    private fun askPin(stored: String) {
-        val t = theme ?: return
-        lateinit var pad: PinPadView
-        pad = PinPadView(activity, t, "enter pin", onEnter = { pin ->
-            val throttle = app.pinThrottle
-            if (!throttle.begin()) {
-                pad.say("too many wrong pins, try again in ${throttle.waitSeconds()} seconds", error = true)
-                return@PinPadView
-            }
-            scope.launch {
-                val ok = withContext(Dispatchers.Default) { Pin.matches(pin, stored) }
-                if (ok) {
-                    throttle.succeeded()
-                    menu()
-                } else {
-                    pad.say("wrong pin", error = true)
-                }
-            }
-        }, onCancel = ::close)
-        show(pad)
     }
 
     private fun menu() {
@@ -133,7 +113,7 @@ class AdminFlow(
                     hideKeyboard()
                     menu()
                 }
-            }, extras = mapOf("ha" to ::registration))
+            }, extras = mapOf("ha" to ::registration, "apps" to ::appActions))
             screen = s
             show(s, SETTINGS_IDLE_MS)
             // a check or download moving along shows up while the screen is open
@@ -184,6 +164,33 @@ class AdminFlow(
             }
         },
     )
+
+    // under the apps settings, whatever android still has to grant for the dashboard to come back
+    // by itself, said in the button, and a way back for hidden apps
+    private fun appActions() = buildList {
+        val l = app.settings.launcher
+        // touch tracking on is also enough for android to let it come back
+        if (l.comeBack == ComeBack.UNTOUCHED && !TouchWatch.running) {
+            add("touch tracking is off, turn it on in accessibility" to { openAndroid(Settings.ACTION_ACCESSIBILITY_SETTINGS) })
+        } else if (l.comeBack != ComeBack.OFF && !app.appReturn.allowed()) {
+            add("android won't let it come back, let litehub show over other apps" to ::allowOverlay)
+        }
+        if (l.hidden.size == 1) add("show the hidden app again" to ::unhideAll)
+        if (l.hidden.size > 1) add("show the ${l.hidden.size} hidden apps again" to ::unhideAll)
+    }
+
+    // android's own screen for it, the hub can't grant it itself
+    private fun allowOverlay() {
+        close()
+        activity.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${app.packageName}")))
+    }
+
+    private fun unhideAll() {
+        scope.launch {
+            withContext(Dispatchers.IO) { app.saveSettings(app.settings.let { it.copy(launcher = it.launcher.copy(hidden = emptyList())) }) }
+            backToSettings()
+        }
+    }
 
     private var updateWatch: Job? = null
 
