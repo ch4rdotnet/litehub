@@ -79,10 +79,11 @@ class LightControls(
         top.addView(head, LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         top.addView(power)
         addView(top)
-        addView(brightnessRow)
-        addView(warmthRow)
-        addView(colourRow)
-        addView(effectsRow)
+        // nothing shows until ha has said what this light can do
+        for (row in listOf(brightnessRow, warmthRow, colourRow, effectsRow)) {
+            row.visibility = GONE
+            addView(row)
+        }
         addView(problem)
         addView(space())
         addView(ButtonView(context, theme, "close", onClose), LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
