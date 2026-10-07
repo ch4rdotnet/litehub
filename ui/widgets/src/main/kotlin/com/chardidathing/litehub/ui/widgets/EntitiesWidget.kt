@@ -19,11 +19,14 @@ import kotlin.math.ceil
 data class EntitiesConfig(val entities: List<String> = emptyList(), val title: String? = null)
 
 // several entities in one tile, a small cell each with its icon, name and state. the grid fits
-// itself to the tile (a 2 by 1 holds 8 comfortably), tapping a cell toggles it when the binder allows
+// itself to the tile (a 2 by 1 holds 8 comfortably), tapping a cell toggles it when the binder
+// allows and holding one opens its controls when it has any
 class EntitiesWidget(context: Context, theme: ResolvedTheme, private val icons: Icons, val config: EntitiesConfig) : WidgetView(context, theme) {
 
     var canTap: (String) -> Boolean = { false }
     var onTap: ((String) -> Unit)? = null
+    var canHold: (String) -> Boolean = { false }
+    var onHold: ((String) -> Unit)? = null
 
     private class Cell(val id: String) {
         val rect = RectF()
@@ -110,6 +113,13 @@ class EntitiesWidget(context: Context, theme: ResolvedTheme, private val icons: 
             c.name.draw(canvas, textLeft, textTop)
             c.state.draw(canvas, textLeft, textTop + c.name.height)
         }
+    }
+
+    override fun hold(x: Float, y: Float): Boolean {
+        val h = onHold ?: return false
+        val cell = cells.firstOrNull { it.rect.contains(x, y) }?.takeIf { canHold(it.id) } ?: return false
+        h(cell.id)
+        return true
     }
 
     override fun onTouchEvent(e: MotionEvent): Boolean {

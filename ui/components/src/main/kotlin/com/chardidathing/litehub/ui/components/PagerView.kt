@@ -26,7 +26,8 @@ class PagerView(context: Context, private val theme: ResolvedTheme, pages: List<
     // inside a touch event, so whatever it sets off can't cost the swipe a frame
     var onSettled: ((page: Int) -> Unit)? = null
 
-    // a finger held still on the dashboard, the way into the admin menu
+    // a finger held still on the dashboard, the way into the admin menu. a tile that has its
+    // own use for a hold (a light's controls) gets first refusal
     var onLongPress: (() -> Unit)? = null
 
     var current = 0
@@ -35,7 +36,19 @@ class PagerView(context: Context, private val theme: ResolvedTheme, pages: List<
     private var longPressed = false
     private val longPress = Runnable {
         longPressed = true
-        onLongPress?.invoke()
+        if (!holdTile()) onLongPress?.invoke()
+    }
+
+    private fun holdTile(): Boolean {
+        val page = getChildAt(current) as? ViewGroup ?: return false
+        val x = downX + scrollX - page.left
+        val y = downY - page.top
+        for (i in page.childCount - 1 downTo 0) {
+            val tile = page.getChildAt(i) as? WidgetView ?: continue
+            if (x < tile.left || x >= tile.right || y < tile.top || y >= tile.bottom) continue
+            return tile.hold(x - tile.left, y - tile.top)
+        }
+        return false
     }
 
     private val config = ViewConfiguration.get(context)

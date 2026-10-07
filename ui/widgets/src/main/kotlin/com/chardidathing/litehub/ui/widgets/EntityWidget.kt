@@ -26,6 +26,15 @@ abstract class EntityWidget(
             isClickable = value != null
         }
 
+    // a hold, for entities with more to them than a toggle (a light's controls)
+    var onHold: (() -> Unit)? = null
+
+    override fun hold(x: Float, y: Float): Boolean {
+        val h = onHold ?: return false
+        h()
+        return true
+    }
+
     protected var snapshot: EntitySnapshot = EntitySnapshot.Connecting
         private set
 

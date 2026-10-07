@@ -18,6 +18,10 @@ abstract class WidgetView(context: Context, protected val theme: ResolvedTheme) 
     private val badgeBlock = TextBlock(maxLines = 1)
     private var badge: String? = null
 
+    // a finger held on the tile at x, y (its own coordinates). true means the tile used it,
+    // otherwise the hold falls through to the dashboard's own menu
+    open fun hold(x: Float, y: Float): Boolean = false
+
     // rebuild cached text and paints here, never in drawContent
     protected abstract fun onContentChanged()
 
