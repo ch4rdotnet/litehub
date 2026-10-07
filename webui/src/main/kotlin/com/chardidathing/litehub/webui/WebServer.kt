@@ -92,6 +92,7 @@ class WebServer(port: Int, private val access: HubAccess, private val assets: As
             s.method == NanoHTTPD.Method.POST && path == "/api/restore" -> saved(access.restore(body(s)))
             s.method == NanoHTTPD.Method.POST && path == "/api/settings/action" -> runBlocking { access.settingsAction(body(s).trim()) }
                 .fold(::json) { text(NanoHTTPD.Response.Status.SERVICE_UNAVAILABLE, it.message ?: "that didn't work") }
+            get && path == "/api/apps" -> json(runBlocking { access.apps() })
             get && path == "/api/entities" -> runBlocking { access.entities() }.fold(::json) { text(NanoHTTPD.Response.Status.SERVICE_UNAVAILABLE, it.message ?: "home assistant isn't reachable") }
             s.method == NanoHTTPD.Method.POST && path == "/api/tile.png" -> runBlocking { access.tilePreview(body(s)) }?.let {
                 NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "image/png", ByteArrayInputStream(it), it.size.toLong())

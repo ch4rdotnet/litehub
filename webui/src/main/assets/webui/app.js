@@ -2,7 +2,7 @@
 // before it's written, so a broken edit never reaches the screen
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-let config = null, schemas = [], sources = { calendars: [], feeds: [] }, entities = [], dash = 0, page = 0, picked = -1;
+let config = null, schemas = [], sources = { calendars: [], feeds: [] }, entities = [], apps = [], dash = 0, page = 0, picked = -1;
 // whole config snapshots for undo, and what the hub last saved so unsaved changes show
 let undoStack = [], redoStack = [], savedText = "";
 // a pointer has to move this far before a press on a tile counts as a drag (css px)
@@ -45,6 +45,7 @@ async function start() {
   api("/api/themes").then((t) => { presets = JSON.parse(t); drawThemes(); }).catch(() => {});
   api("/api/sources").then((t) => { sources = JSON.parse(t); }).catch(() => {});
   api("/api/entities").then((t) => { entities = JSON.parse(t); render(); }).catch(() => {});
+  api("/api/apps").then((t) => { apps = JSON.parse(t); render(); }).catch(() => {});
   render();
   refreshPreview();
   setInterval(refreshPreview, 30000);
@@ -57,6 +58,7 @@ const board = () => config.dashboards[dash];
 const current = () => board().pages[page];
 const schemaOf = (type) => schemas.find((s) => s.type === type);
 const entityName = (id) => entities.find((e) => e.id === id)?.name;
+const appName = (key) => apps.find((a) => a.key === key)?.label;
 
 // call before changing config, so undo can go back to it
 function remember() {
@@ -235,7 +237,7 @@ function tileHtml(w, p) {
   }
   const schema = schemaOf(w.type);
   const c = w.config || {};
-  const title = c.title || c.name || entityName(c.entity) || c.entity || "";
+  const title = c.title || c.name || entityName(c.entity) || c.entity || appName(c.app) || c.app || "";
   let inner = "";
   if (w.type === "entities") {
     inner = `<div class="minis">${(c.entities || []).map((id) => `<span>${esc(entityName(id) || id)}</span>`).join("")}</div>`;
@@ -464,6 +466,8 @@ function field(f, values) {
     `<input name="${f.key}" value="${value}" placeholder="#rrggbb"></div>`;
   if (f.kind === "time") return `<label>${label}<input name="${f.key}" type="time" value="${value}"></label>`;
   if (f.kind === "secret") return `<label>${label}<input name="${f.key}" type="password" autocomplete="off" placeholder="leave blank to keep it"></label>`;
+  if (f.kind === "app") return `<label>${label}<input name="${f.key}" list="apps-${f.key}" value="${value}"><datalist id="apps-${f.key}">` +
+    apps.map((a) => `<option value="${esc(a.key)}">${esc(a.label)}</option>`).join("") + `</datalist></label>`;
   if (f.kind !== "entity" && f.kind !== "entities") return `<label>${label}<input name="${f.key}" value="${value}"></label>`;
   // suggestions only from the domains the field can use, the same filter as the hub's own picker
   const fit = entities.filter((e) => !f.domains || !f.domains.length || f.domains.includes(e.id.split(".")[0]));

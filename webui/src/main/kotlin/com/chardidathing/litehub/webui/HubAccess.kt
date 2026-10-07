@@ -44,6 +44,9 @@ interface HubAccess {
 
     suspend fun entities(): Result<String>
 
+    // the apps an app tile can open, key and label each
+    suspend fun apps(): String
+
     // one tile drawn by the hub as a png, from the editor's copy of its placement, page and theme.
     // null when there's nothing on screen to size it against
     suspend fun tilePreview(body: String): ByteArray?

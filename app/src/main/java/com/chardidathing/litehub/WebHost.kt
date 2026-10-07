@@ -16,11 +16,15 @@ import com.chardidathing.litehub.ui.tokens.Presets
 import com.chardidathing.litehub.ui.widgets.WidgetSchemas
 import com.chardidathing.litehub.webui.HubAccess
 import com.chardidathing.litehub.webui.WebServer
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.add
+import kotlinx.serialization.json.addJsonObject
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
@@ -152,6 +156,17 @@ class WebHost(private val app: LitehubApp) : HubAccess {
 
     override suspend fun entities(): Result<String> = app.ha.catalogue().map { list ->
         Json.encodeToString(ListSerializer(com.chardidathing.litehub.core.model.EntityChoice.serializer()), list)
+    }
+
+    override suspend fun apps(): String = withContext(Dispatchers.IO) {
+        buildJsonArray {
+            for (a in app.apps.list()) {
+                addJsonObject {
+                    put("key", a.key)
+                    put("label", a.label)
+                }
+            }
+        }.toString()
     }
 
     private val tiles = TilePreview(app)
