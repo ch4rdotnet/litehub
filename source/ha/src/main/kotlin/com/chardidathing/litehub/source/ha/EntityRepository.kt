@@ -255,11 +255,21 @@ class EntityRepository(
         val c = client ?: return@withContext Result.failure(IOException(statusReason()))
         val current = entities[id]
         val (service, guessState) = tap(id, current?.state)
-        val guess = guessState?.let { current?.copy(state = it) }
+        act(c, id, service, null, guessState?.let { current?.copy(state = it) })
+    }
+
+    // any other service call on one entity (a light's brightness or colour), drawn as guessed
+    // straight away and rolled back the same way a toggle is
+    suspend fun control(id: String, service: String, data: JsonObject): Result<JsonObject?> = withContext(confined) {
+        val c = client ?: return@withContext Result.failure(IOException(statusReason()))
+        act(c, id, service, data, (optimistic[id] ?: entities[id])?.let { Guess.after(it, service, data) })
+    }
+
+    private suspend fun act(c: HaClient, id: String, service: String, data: JsonObject?, guess: Entity?): Result<JsonObject?> {
         errors.remove(id)
         if (guess != null) optimistic[id] = guess
         publish(id)
-        val result = c.callService(id.substringBefore('.'), service, id)
+        val result = c.callService(id.substringBefore('.'), service, id, data)
         if (result.isFailure) {
             if (guess != null) optimistic.remove(id)
             val message = result.exceptionOrNull()?.message ?: "home assistant refused"
@@ -270,7 +280,7 @@ class EntityRepository(
             expire(id, timing.optimisticHold) { optimistic[id] === guess && optimistic.remove(id) != null }
         }
         publish(id)
-        result
+        return result
     }
 
     private fun expire(id: String, after: Duration, drop: () -> Boolean) {
