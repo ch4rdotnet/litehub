@@ -147,9 +147,7 @@ class LitehubApp : Application() {
             reload = true
         }
         saved.ha?.let { edit ->
-            val token = edit.token ?: HaCredentials.load(File(filesDir, HA_FILE)).getOrNull()?.token
-                ?: throw IOException("a long lived token is needed the first time")
-            File(filesDir, HA_FILE).writeAtomic(Json.encodeToString(HaCredentials.serializer(), HaCredentials(edit.url, token)))
+            File(filesDir, HA_FILE).writeAtomic(Json.encodeToString(HaCredentials.serializer(), HaCredentials(edit.url, edit.token)))
             reload = true
         }
         return reload

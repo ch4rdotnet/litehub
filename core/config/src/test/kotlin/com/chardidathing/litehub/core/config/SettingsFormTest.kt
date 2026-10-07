@@ -82,6 +82,12 @@ class SettingsFormTest {
         assertEquals("key", s.screensaver.photos!!.immich!!.apiKey)
         assertEquals("other", s.screensaver.photos!!.immich!!.albumId)
         assertThrows(ConfigException::class.java) { apply(hub, "photos.source" to "immich", "photos.immichUrl" to "http://i", "photos.immichAlbum" to "a") }
+        // a new server never gets the stored key, it has to be typed again
+        val moved = assertThrows(ConfigException::class.java) { apply(withImmich, "photos.immichUrl" to "http://elsewhere") }
+        assertEquals("immich api key is needed again when the url changes", moved.message)
+        assertEquals("new", apply(withImmich, "photos.immichUrl" to "http://elsewhere", "photos.immichKey" to "new").device.screensaver.photos!!.immich!!.apiKey)
+        // a trailing slash isn't a different server
+        assertEquals("key", apply(withImmich, "photos.immichUrl" to "http://i/").device.screensaver.photos!!.immich!!.apiKey)
     }
 
     @Test
@@ -133,8 +139,10 @@ class SettingsFormTest {
     }
 
     @Test
-    fun `ha changes only when touched and needs a token the first time`() {
-        assertEquals(HaEdit("http://ha2:8123", null), apply(hub, "ha.url" to "http://ha2:8123").ha)
+    fun `ha changes only when touched and needs the token again for a new url`() {
+        val moved = assertThrows(ConfigException::class.java) { apply(hub, "ha.url" to "http://ha2:8123") }
+        assertEquals("the long lived token is needed again when the url changes", moved.message)
+        assertEquals(HaEdit("http://ha2:8123", "tok2"), apply(hub, "ha.url" to "http://ha2:8123", "ha.token" to "tok2").ha)
         assertEquals(HaEdit("http://ha:8123", "tok"), apply(hub, "ha.token" to "tok").ha)
         val fresh = hub.copy(haUrl = null, haTokenSet = false)
         assertThrows(ConfigException::class.java) { apply(fresh, "ha.url" to "http://ha:8123") }

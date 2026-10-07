@@ -29,10 +29,10 @@ import java.util.Locale
 // token never comes in here, only whether one is set
 data class HubSettings(val device: DeviceSettings, val sources: Sources, val haUrl: String?, val haTokenSet: Boolean)
 
-// what a save hands back. ha is null when the connection wasn't touched, a null token keeps the old one
+// what a save hands back. ha is null when the connection wasn't touched
 data class SavedSettings(val device: DeviceSettings, val sources: Sources, val ha: HaEdit?)
 
-data class HaEdit(val url: String, val token: String?)
+data class HaEdit(val url: String, val token: String)
 
 // the hub's settings as one form, key to value (a list section's value is an array of item
 // objects). the settings screen on the device and the web ui both draw these sections and hand
@@ -339,16 +339,18 @@ object SettingsForm {
     private fun plain(n: Double?) = n?.let { if (it % 1.0 == 0.0) it.toLong().toString() else it.toString() } ?: "any"
 
     private fun build(s: DeviceSettings, v: Values): DeviceSettings {
-        val existingKey = s.screensaver.photos?.immich?.apiKey
         val photos = when (v.text(PHOTOS)) {
             "folder" -> PhotoSettings(folder = v.needed("photos.folder"))
-            "immich" -> PhotoSettings(
-                immich = ImmichSettings(
-                    url = v.needed("photos.immichUrl"),
-                    apiKey = v.text("photos.immichKey").ifBlank { existingKey ?: throw ConfigException("immich api key is needed") },
-                    albumId = v.needed("photos.immichAlbum"),
-                ),
-            )
+            "immich" -> {
+                val url = v.needed("photos.immichUrl")
+                val stored = s.screensaver.photos?.immich
+                // the stored key only goes back to the server it was entered for, a new url needs it again
+                val kept = stored?.takeIf { it.url.trimEnd('/') == url.trimEnd('/') }?.apiKey
+                val key = v.text("photos.immichKey").ifBlank {
+                    kept ?: throw ConfigException(if (stored != null) "immich api key is needed again when the url changes" else "immich api key is needed")
+                }
+                PhotoSettings(immich = ImmichSettings(url = url, apiKey = key, albumId = v.needed("photos.immichAlbum")))
+            }
             "ha" -> PhotoSettings(haMedia = v.needed("photos.haMedia"))
             else -> null
         }
@@ -432,8 +434,11 @@ object SettingsForm {
         val token = v.text("ha.token").ifEmpty { null }
         if (url == h.haUrl.orEmpty() && token == null) return null
         if (url.isEmpty()) throw ConfigException("home assistant url is needed")
-        if (token == null && !h.haTokenSet) throw ConfigException("a long lived token is needed the first time")
-        return HaEdit(url, token)
+        // a stored token only ever goes back to the server it was entered for, a new url needs it again
+        val t = token ?: throw ConfigException(
+            if (h.haTokenSet) "the long lived token is needed again when the url changes" else "a long lived token is needed the first time",
+        )
+        return HaEdit(url, t)
     }
 
     private class Values(private val v: Map<String, JsonElement>) {
