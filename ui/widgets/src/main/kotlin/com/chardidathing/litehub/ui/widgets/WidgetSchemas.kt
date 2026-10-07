@@ -18,7 +18,7 @@ object WidgetSchemas {
                 SchemaField("name", "name", FieldKind.TEXT),
                 SchemaField("icon", "icon (mdi:name)", FieldKind.TEXT),
             ),
-            description = "one entity's icon, name and state, tap to toggle it",
+            description = "one entity's icon, name and state, tap to toggle it, hold a light for its controls",
         ),
         WidgetSchema(
             "sensor", "sensor value", 1, 1,
@@ -73,7 +73,7 @@ object WidgetSchemas {
                 SchemaField("title", "title", FieldKind.TEXT),
                 SchemaField("entities", "entities", FieldKind.ENTITIES, required = true),
             ),
-            description = "lots of entities in one tile, each with its state, tap one to toggle it",
+            description = "lots of entities in one tile, each with its state, tap one to toggle it, hold a light for its controls",
         ),
         WidgetSchema(
             "clock", "clock", 1, 1,

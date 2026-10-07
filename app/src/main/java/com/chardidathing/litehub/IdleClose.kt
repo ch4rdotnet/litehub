@@ -29,4 +29,9 @@ class IdleClose(private val container: View, private val onIdle: () -> Unit) {
     }
 
     fun stop() = container.removeCallbacks(idle)
+
+    companion object {
+        // how long a screen over the dashboard waits for a touch before it goes
+        const val SCREEN_MS = 60_000L
+    }
 }

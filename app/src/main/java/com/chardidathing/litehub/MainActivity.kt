@@ -35,6 +35,8 @@ import android.view.ViewTreeObserver
 import com.chardidathing.litehub.ui.components.MessageView
 import com.chardidathing.litehub.ui.components.PageView
 import com.chardidathing.litehub.ui.components.PagerView
+import com.chardidathing.litehub.ui.components.PanelView
+import com.chardidathing.litehub.ui.widgets.LightControls
 import com.chardidathing.litehub.ui.components.WidgetView
 import com.chardidathing.litehub.ui.tokens.ResolvedTheme
 import com.chardidathing.litehub.ui.widgets.WidgetCatalog
@@ -115,6 +117,7 @@ class MainActivity : Activity() {
     @Deprecated("still the only back hook on api 28")
     override fun onBackPressed() {
         when {
+            controls != null -> closeControls()
             shade != null -> shade?.close()
             prompt != null -> closePrompt()
             editor.isOpen -> editor.back()
@@ -125,6 +128,7 @@ class MainActivity : Activity() {
     // home pressed while already home
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        closeControls()
         admin.close()
         editor.close()
     }
@@ -228,6 +232,7 @@ class MainActivity : Activity() {
             val theme = this@MainActivity.theme ?: return
             if (saver != null) return
             // nobody's at the screen, so nothing pin protected stays open under the screensaver
+            closeControls()
             admin.close()
             editor.close()
             val view = ScreensaverView(this@MainActivity, theme)
@@ -423,6 +428,29 @@ class MainActivity : Activity() {
         app.weather.start()
     }
 
+    // a light's controls over the dashboard, opened by holding its tile
+    private var controls: View? = null
+    private var controlsJob: Job? = null
+    private val controlsIdle by lazy { IdleClose(root) { closeControls() } }
+
+    private fun openControls(id: String) {
+        val theme = this.theme ?: return
+        closeControls()
+        val panel = LightControls(this, theme, id, send = { service, data -> scope.launch { app.ha.control(id, service, data) } }, onClose = ::closeControls)
+        controlsJob = scope.launch { app.ha.snapshot(id).collect(panel::show) }
+        val view = PanelView(this, theme, panel, ::closeControls)
+        controls = controlsIdle.wrap(view, IdleClose.SCREEN_MS).also(root::addView)
+        view.open()
+    }
+
+    private fun closeControls() {
+        controlsIdle.stop()
+        controlsJob?.cancel()
+        controlsJob = null
+        controls?.let(root::removeView)
+        controls = null
+    }
+
     private var prompt: TextPrompt? = null
 
     private fun askText(title: String, onText: (String) -> Unit) {
@@ -483,6 +511,7 @@ class MainActivity : Activity() {
         binder?.stop()
         binder = null
         pager = null
+        closeControls()
         // the window background is the dashboard background, so nothing else has to paint it
         window.setBackgroundDrawable(ColorDrawable(theme.colors.background))
         val view = when (screen) {
@@ -497,7 +526,7 @@ class MainActivity : Activity() {
                     widgets += made
                     view
                 }
-                val b = DashboardBinder(app.ha, app.calendars, app.feeds, app.weather, ::askText, app.notifications, app::photoFrame, { app.settings.screensaver.photoSeconds }, ticker.now, widgets, scope)
+                val b = DashboardBinder(app.ha, app.calendars, app.feeds, app.weather, ::askText, ::openControls, app.notifications, app::photoFrame, { app.settings.screensaver.photoSeconds }, ticker.now, widgets, scope)
                 binder = b
                 PagerView(this, theme, pages).also {
                     pager = it

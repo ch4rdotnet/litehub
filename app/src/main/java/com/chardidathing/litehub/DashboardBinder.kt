@@ -9,6 +9,7 @@ import com.chardidathing.litehub.ui.widgets.EntityWidget
 import com.chardidathing.litehub.ui.widgets.EntitiesWidget
 import com.chardidathing.litehub.ui.widgets.ClockWidget
 import com.chardidathing.litehub.ui.widgets.FeedWidget
+import com.chardidathing.litehub.ui.widgets.LightControls
 import com.chardidathing.litehub.ui.widgets.PhotoWidget
 import com.chardidathing.litehub.ui.widgets.Moment
 import com.chardidathing.litehub.ui.widgets.NotificationsWidget
@@ -32,6 +33,8 @@ class DashboardBinder(
     private val weather: WeatherRepository,
     // a list's "type" chip wants the keyboard, the activity owns that
     private val askText: (title: String, onText: (String) -> Unit) -> Unit,
+    // a held light opens its controls over the dashboard, the activity owns that too
+    private val openControls: (entity: String) -> Unit,
     private val notifications: NotificationCenter,
     // a fresh frame per photo tile, each keeps its own shuffled queue
     private val photoFrame: () -> Result<PhotoFrame>,
@@ -48,10 +51,13 @@ class DashboardBinder(
             val id = widget.config.entity
             // failures come back through the snapshot, so there's nothing to handle here
             if (ha.canToggle(id)) widget.onTap = { scope.launch { ha.toggle(id) } }
+            if (LightControls.supports(id)) widget.onHold = { openControls(id) }
         }
         for (group in pages.flatten().filterIsInstance<EntitiesWidget>()) {
             group.canTap = ha::canToggle
             group.onTap = { id -> scope.launch { ha.toggle(id) } }
+            group.canHold = LightControls::supports
+            group.onHold = openControls
         }
         for (panel in pages.flatten().filterIsInstance<NotificationsWidget>()) {
             panel.onRemove = notifications::remove

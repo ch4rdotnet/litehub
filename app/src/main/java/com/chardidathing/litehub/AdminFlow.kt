@@ -480,7 +480,7 @@ class AdminFlow(
         }
     }
 
-    private fun show(view: View, idleMs: Long = IDLE_CLOSE_MS) {
+    private fun show(view: View, idleMs: Long = IdleClose.SCREEN_MS) {
         if (!live) return
         overlay?.let(container::removeView)
         val watched = idle.wrap(view, idleMs)
@@ -489,7 +489,6 @@ class AdminFlow(
     }
 
     private companion object {
-        const val IDLE_CLOSE_MS = 60_000L
         // the start of the release notes, the rest is on github
         const val NOTES_LINES = 8
         // typing on the keyboard isn't a touch on the screen, a form gets longer
