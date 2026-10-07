@@ -7,6 +7,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import com.chardidathing.litehub.core.model.WidgetSchema
+import com.chardidathing.litehub.ui.components.styled
 import com.chardidathing.litehub.ui.components.ButtonView
 import com.chardidathing.litehub.ui.tokens.ResolvedTheme
 import com.chardidathing.litehub.ui.widgets.Legend
