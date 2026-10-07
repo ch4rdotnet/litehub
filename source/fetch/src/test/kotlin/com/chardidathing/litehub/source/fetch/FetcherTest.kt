@@ -53,4 +53,12 @@ class FetcherTest {
         assertTrue(result.isFailure)
         assertEquals("can't reach the host", result.exceptionOrNull()?.message)
     }
+
+    @Test
+    fun `a parser tripping over the content is a failed source, not a crash`() {
+        val file = java.io.File.createTempFile("feed", ".xml").apply { writeText("anything"); deleteOnExit() }
+        val result = runBlocking { Fetcher(OkHttpClient()).get(file.absolutePath) { _, _ -> throw ArithmeticException("long overflow") } }
+        assertTrue(result.isFailure)
+        assertEquals("couldn't read what came back", result.exceptionOrNull()?.message)
+    }
 }

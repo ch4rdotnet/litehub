@@ -1,5 +1,6 @@
 package com.chardidathing.litehub.source.fetch
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -35,6 +36,12 @@ class Fetcher(private val http: OkHttpClient) {
             Result.failure(IOException(describe(e), e))
         } catch (e: IllegalArgumentException) {
             Result.failure(IOException("the url isn't valid", e))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: RuntimeException) {
+            // a parser tripping over what someone else's server sent is that source failing,
+            // never the hub crashing
+            Result.failure(IOException("couldn't read what came back", e))
         }
     }
 

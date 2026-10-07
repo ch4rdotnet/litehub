@@ -1,5 +1,6 @@
 package com.chardidathing.litehub.source.fetch
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -35,7 +36,15 @@ class RefreshLoop(
                 val t = now()
                 for ((id, interval) in intervals) {
                     if ((nextDue[id] ?: 0L) > t) continue
-                    val ok = refresh(id)
+                    // one source going wrong in a way nobody planned for retries later, the
+                    // loop and every other source carry on
+                    val ok = try {
+                        refresh(id)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        false
+                    }
                     nextDue[id] = now() + if (ok) interval.inWholeMilliseconds else RETRY.inWholeMilliseconds
                 }
                 val wait = (nextDue.values.minOrNull() ?: return@launch) - now()
