@@ -7,6 +7,7 @@ import org.junit.Test
 import java.io.IOException
 import java.io.StringReader
 import java.time.Instant
+import org.junit.Assert.assertThrows
 
 class FeedParserTest {
 
@@ -45,5 +46,38 @@ class FeedParserTest {
             <rss><channel><item><title>a &x; b</title></item></channel></rss>"""
         val items = runCatching { FeedParser.parse(StringReader(xxe), "x") }.getOrNull().orEmpty()
         assertTrue(items.none { "root:" in it.title })
+    }
+
+    @Test
+    fun `a date past what millis hold is no date, not a crash`() {
+        val rss = """<rss><channel><item><title>far off</title><pubDate>+999999999-01-01T00:00:00Z</pubDate></item></channel></rss>"""
+        val item = FeedParser.parse(StringReader(rss), "x").single()
+        assertEquals("far off", item.title)
+        assertNull(item.publishedMs)
+    }
+
+    @Test
+    fun `a feed declaring its own entities is refused, a plain doctype isn't`() {
+        val bomb = """<?xml version="1.0"?><!DOCTYPE rss [<!ENTITY a "aaaaaaaaaa"><!ENTITY b "&a;&a;&a;&a;&a;">]>
+            <rss><channel><item><title>&b;</title></item></channel></rss>"""
+        assertThrows(IOException::class.java) { FeedParser.parse(StringReader(bomb), "x") }
+        val old = """<?xml version="1.0"?><!DOCTYPE rss PUBLIC "-//Netscape Communications//DTD RSS 0.91//EN" "http://my.netscape.com/publish/formats/rss-0.91.dtd">
+            <rss><channel><item><title>still read</title></item></channel></rss>"""
+        assertEquals("still read", FeedParser.parse(StringReader(old), "x").single().title)
+    }
+
+    @Test
+    fun `a title made of open brackets is stripped in one pass`() {
+        val rss = "<rss><channel><item><title><![CDATA[" + "<".repeat(200_000) + "]]></title></item></channel></rss>"
+        val started = System.nanoTime()
+        runCatching { FeedParser.parse(StringReader(rss), "x") }
+        // the old regex took minutes on this, a linear pass is well under a second
+        assertTrue((System.nanoTime() - started) / 1_000_000 < 5_000)
+    }
+
+    @Test
+    fun `tags are stripped and space collapsed`() {
+        val rss = "<rss><channel><item><title><![CDATA[<b>big</b>   news <i>today</i> a < b]]></title></item></channel></rss>"
+        assertEquals("big news today a < b", FeedParser.parse(StringReader(rss), "x").single().title)
     }
 }
