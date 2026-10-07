@@ -2,6 +2,10 @@ plugins {
     alias(libs.plugins.android.application)
 }
 
+// release signing only ever comes from the environment, which ci fills from its protected
+// secrets. without KEYSTORE_PATH the release apk is left unsigned, as local and pr builds are
+val releaseKeystore: String? = System.getenv("KEYSTORE_PATH")
+
 android {
     namespace = "com.chardidathing.litehub"
     compileSdk = libs.versions.compileSdk.get().toInt()
@@ -14,8 +18,20 @@ android {
         versionName = "1.0"
     }
 
+    signingConfigs {
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = file(releaseKeystore)
+                storePassword = System.getenv("KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("KEY_ALIAS")
+                keyPassword = System.getenv("KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            if (releaseKeystore != null) signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
