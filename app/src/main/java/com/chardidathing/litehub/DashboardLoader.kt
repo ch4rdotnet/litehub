@@ -1,17 +1,21 @@
 package com.chardidathing.litehub
 
+import android.os.Build
 import android.util.DisplayMetrics
 import com.chardidathing.litehub.core.config.ConfigCodec
 import com.chardidathing.litehub.core.config.ConfigException
+import com.chardidathing.litehub.core.config.SourcesCodec
 import com.chardidathing.litehub.core.config.Themes
 import com.chardidathing.litehub.core.model.Config
 import com.chardidathing.litehub.core.model.Page
 import com.chardidathing.litehub.core.model.Theme
+import com.chardidathing.litehub.source.ha.HaCredentials
 import com.chardidathing.litehub.ui.components.Icons
 import com.chardidathing.litehub.ui.tokens.Presets
 import com.chardidathing.litehub.ui.tokens.ResolvedTheme
 import com.chardidathing.litehub.ui.widgets.Legend
 import com.chardidathing.litehub.ui.widgets.WidgetCatalog
+
 import java.io.File
 import java.io.IOException
 
@@ -53,16 +57,43 @@ class DashboardLoader(private val app: LitehubApp) {
     }
 
     // adb can't reach private storage on a release build, so files are dropped in the app's
-    // external folder and moved in here. the external copy goes, other apps can read it on old android
+    // external folder and moved in here. the external copy goes, other apps can read it on old
+    // android. before 11 other apps could write it too, so there the drop box is shut
     private fun importDropped() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
         val dropbox = app.getExternalFilesDir(null) ?: return
         for (name in listOf(LitehubApp.HA_FILE, LitehubApp.CONFIG_FILE, LitehubApp.SOURCES_FILE)) {
             val dropped = File(dropbox, name).takeIf { it.exists() } ?: continue
+            // a file that wouldn't load stays where it was dropped, the working one is kept
+            val problem = droppedProblem(name, dropped)
+            if (problem != null) {
+                AppLog.add("$name in the drop folder wasn't imported, $problem")
+                continue
+            }
             val partial = File(app.filesDir, "$name.partial")
             dropped.copyTo(partial, overwrite = true)
             partial.renameTo(File(app.filesDir, name))
             dropped.delete()
         }
+    }
+
+    private fun droppedProblem(name: String, file: File): String? = try {
+        val text = file.readText()
+        when (name) {
+            LitehubApp.HA_FILE -> HaCredentials.load(file).exceptionOrNull()?.message
+            LitehubApp.CONFIG_FILE -> {
+                ConfigCodec.decode(text)
+                null
+            }
+            else -> {
+                SourcesCodec.decode(text)
+                null
+            }
+        }
+    } catch (e: ConfigException) {
+        e.message
+    } catch (e: IOException) {
+        "it couldn't be read"
     }
 
     // calendars without their own colour take the theme palette in order

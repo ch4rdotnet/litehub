@@ -1,6 +1,6 @@
 // renders /api/status, read only
 const esc = (s) => String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
-const row = (k, v, bad) => `<tr><td>${k}</td><td class="${bad ? "error" : ""}">${esc(v)}</td></tr>`;
+const row = (k, v, bad) => `<tr><td>${esc(k)}</td><td class="${bad ? "error" : ""}">${esc(v)}</td></tr>`;
 const sources = (list) => list.length ? `<table>${list.map((s) =>
   row(s.name, s.error ? `failing, ${s.error}` : s.last_good ? `ok, ${s.last_good}` : "not fetched yet", !!s.error)).join("")}</table>` : "<p>none</p>";
 
