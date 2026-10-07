@@ -3,25 +3,28 @@ package com.chardidathing.litehub
 import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.net.Uri
 import android.provider.Settings
 import android.view.View
+import android.view.inputmethod.InputMethodManager
 import android.widget.FrameLayout
 import com.chardidathing.litehub.core.config.ConfigException
 import com.chardidathing.litehub.core.config.HubSettings
-import com.chardidathing.litehub.core.config.SettingsForm
 import com.chardidathing.litehub.core.config.Pin
-import com.chardidathing.litehub.ui.editor.EntityPicker
-import com.chardidathing.litehub.ui.editor.SettingsScreen
-import android.view.inputmethod.InputMethodManager
-import kotlinx.serialization.json.JsonObject
-import java.io.IOException
+import com.chardidathing.litehub.core.config.SettingsForm
 import com.chardidathing.litehub.ui.components.MenuView
 import com.chardidathing.litehub.ui.components.PinPadView
+import com.chardidathing.litehub.ui.editor.EntityPicker
+import com.chardidathing.litehub.ui.editor.SettingsScreen
 import com.chardidathing.litehub.ui.tokens.ResolvedTheme
+import java.io.IOException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.JsonObject
 
 // the long press menu over the dashboard. asks for the pin first when one is set, and closes
 // itself after a minute untouched so a kiosk never sits on it
@@ -60,6 +63,7 @@ class AdminFlow(
 
     fun close() {
         live = false
+        updateWatch?.cancel()
         idle.stop()
         overlay?.let(container::removeView)
         overlay = null
@@ -111,7 +115,7 @@ class AdminFlow(
         val t = theme ?: return
         scope.launch {
             val before = withContext(Dispatchers.IO) { app.hubSettings() }
-            val s = SettingsScreen(activity, t, SettingsForm.sections, SettingsForm.values(before), listOf(device(), log()), object : SettingsScreen.Host {
+            val s = SettingsScreen(activity, t, SettingsForm.sections, SettingsForm.values(before), listOf(device(), updates(), log()), object : SettingsScreen.Host {
                 override fun pickEntity(domains: List<String>, onPicked: (String) -> Unit) = pick(t, domains, onPicked)
                 override fun newItem(section: String) = SettingsForm.newItem(section)
                 override fun action(id: String, done: (Result<JsonObject>) -> Unit) {
@@ -128,6 +132,9 @@ class AdminFlow(
             }, extras = mapOf("ha" to ::registration))
             screen = s
             show(s, SETTINGS_IDLE_MS)
+            // a check or download moving along shows up while the screen is open
+            updateWatch?.cancel()
+            updateWatch = scope.launch { app.updater.state.drop(1).collect { screen?.refresh() } }
         }
     }
 
@@ -173,6 +180,57 @@ class AdminFlow(
             }
         },
     )
+
+    private var updateWatch: Job? = null
+
+    // what's installed, what github has, and whatever gets from one to the other. nothing is
+    // checked until asked, and android's own prompt has the last word on installing
+    private fun updates() = SettingsScreen.ActionSection(
+        "updates",
+        items = {
+            val u = app.updater
+            val s = u.state.value
+            buildList {
+                if (s is Updater.State.Available) {
+                    if (u.allowed()) add("install ${s.release.version}" to { scope.launch { u.install(s.release) } })
+                    else add("allow litehub to install updates" to ::allowInstalls)
+                }
+                val busy = s is Updater.State.Checking || s is Updater.State.Downloading || s is Updater.State.Installing
+                if (!busy) add("check for updates" to { scope.launch { u.check() } })
+            }
+        },
+        info = { done ->
+            val u = app.updater
+            val (status, bad) = when (val s = u.state.value) {
+                Updater.State.Idle -> "not checked yet" to false
+                Updater.State.Checking -> "checking github" to false
+                Updater.State.UpToDate -> "up to date" to false
+                Updater.State.NoReleases -> "there are no releases yet" to false
+                is Updater.State.Available -> "${s.release.version} is out" to false
+                is Updater.State.Downloading -> "downloading ${s.release.version}" to false
+                is Updater.State.Installing -> "waiting on android's install prompt" to false
+                is Updater.State.Failed -> s.reason to true
+            }
+            val notes = (u.state.value as? Updater.State.Available)?.release?.notes.orEmpty()
+                .lines().map { it.trim() }.filter { it.isNotEmpty() }.take(NOTES_LINES)
+            done(
+                buildList {
+                    add(SettingsScreen.InfoRow("installed", u.current))
+                    add(SettingsScreen.InfoRow("status", status, bad))
+                    if (notes.isNotEmpty()) {
+                        add(SettingsScreen.InfoRow("what's new"))
+                        notes.forEach { add(SettingsScreen.InfoRow("", it)) }
+                    }
+                },
+            )
+        },
+    )
+
+    // android's per app switch for installing others, the hub can't flip it itself
+    private fun allowInstalls() {
+        close()
+        activity.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${app.packageName}")))
+    }
 
     // newest first, the time beside each line
     private fun log() = SettingsScreen.ActionSection(
@@ -302,6 +360,8 @@ class AdminFlow(
 
     private companion object {
         const val IDLE_CLOSE_MS = 60_000L
+        // the start of the release notes, the rest is on github
+        const val NOTES_LINES = 8
         // typing on the keyboard isn't a touch on the screen, a form gets longer
         const val SETTINGS_IDLE_MS = 5 * 60_000L
     }

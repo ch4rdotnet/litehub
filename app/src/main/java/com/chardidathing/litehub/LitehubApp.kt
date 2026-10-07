@@ -69,6 +69,8 @@ class LitehubApp : Application() {
 
     val status by lazy { HubStatus(this) }
 
+    val updater by lazy { Updater(this) }
+
     // wrong pin guesses, counted across the device's pin pad and the web login together
     val pinThrottle = PinThrottle()
 

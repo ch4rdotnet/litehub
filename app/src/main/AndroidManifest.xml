@@ -12,6 +12,8 @@
     <!-- a photo folder on the device, asked for when one is set -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <!-- the updater hands a downloaded release to android's installer, which still asks first -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- dlna discovery is multicast, most wifi drivers drop it unless asked not to -->
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
 
@@ -60,6 +62,10 @@
                 <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
             </intent-filter>
         </receiver>
+
+        <receiver
+            android:name=".UpdateResult"
+            android:exported="false" />
 
         <receiver
             android:name=".NightAlarm"
