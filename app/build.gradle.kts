@@ -6,6 +6,16 @@ plugins {
 // secrets. without KEYSTORE_PATH the release apk is left unsigned, as local and pr builds are
 val releaseKeystore: String? = System.getenv("KEYSTORE_PATH")
 
+// the version is the release tag, ci passes v1.2.3 in as VERSION_NAME=1.2.3 and the code is
+// 10203, so a tag is the only place a version is written. local builds are 0.0.0-dev
+val appVersion: String = System.getenv("VERSION_NAME") ?: "0.0.0-dev"
+val appVersionCode: Int = run {
+    val (major, minor, patch) = Regex("""^(\d+)\.(\d+)\.(\d+)""").find(appVersion)?.destructured
+        ?: error("VERSION_NAME $appVersion isn't a version like 1.2.3")
+    require(minor.toInt() < 100 && patch.toInt() < 100) { "minor and patch have to stay under 100 to fit the version code" }
+    (major.toInt() * 10_000 + minor.toInt() * 100 + patch.toInt()).coerceAtLeast(1)
+}
+
 android {
     namespace = "com.chardidathing.litehub"
     compileSdk = libs.versions.compileSdk.get().toInt()
@@ -14,8 +24,10 @@ android {
         applicationId = "com.chardidathing.litehub"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = appVersionCode
+        versionName = appVersion
+        // where the updater looks for new releases
+        buildConfigField("String", "UPDATE_REPO", "\"ch4rdotnet/litehub\"")
     }
 
     signingConfigs {

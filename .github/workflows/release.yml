@@ -34,6 +34,16 @@ jobs:
           # gradle's daemon toolchain is pinned to 21 (gradle/gradle-daemon-jvm.properties)
           java-version: "21"
 
+      # v1.2.3 becomes the app's version 1.2.3, anything that isn't a version stops here
+      - name: Version from tag
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
+            printf 'tag %s is not a version like v1.2.3\n' "$GITHUB_REF_NAME" >&2
+            exit 1
+          fi
+          printf 'VERSION_NAME=%s\n' "$version" >> "$GITHUB_ENV"
+
       - name: Decode keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
@@ -61,4 +71,8 @@ jobs:
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" "$RUNNER_TEMP/litehub-$GITHUB_REF_NAME.apk" --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes --verify-tag
+        # a tag with a dash (v1.3.0-beta.1) is a pre-release, hubs on stable never see it
+        run: |
+          prerelease=""
+          case "$VERSION_NAME" in *-*) prerelease="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" "$RUNNER_TEMP/litehub-$GITHUB_REF_NAME.apk" --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes --verify-tag $prerelease
