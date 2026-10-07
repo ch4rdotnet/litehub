@@ -56,8 +56,12 @@ class ScreensaverController(private val app: LitehubApp, private val scope: Coro
         ticking = scope.launch {
             while (true) {
                 evaluate()
-                // the next minute boundary, so idle and night line up with the clock
-                delay(MINUTE_MS - System.currentTimeMillis() % MINUTE_MS)
+                // the next minute boundary so night lines up with the clock, or sooner when the idle
+                // time runs out first (a minute's idle otherwise took up to two)
+                val now = System.currentTimeMillis()
+                val minute = MINUTE_MS - now % MINUTE_MS
+                val idleLeft = lastInteraction + app.settings.screensaver.idleMinutes * MINUTE_MS - now
+                delay(if (idleLeft > 0) minOf(minute, idleLeft) else minute)
             }
         }
         watchEntities()
