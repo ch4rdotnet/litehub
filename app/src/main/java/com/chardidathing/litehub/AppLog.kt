@@ -14,8 +14,11 @@ object AppLog {
 
     @Synchronized
     fun add(message: String) {
-        Log.i(TAG, message)
-        lines.addLast("${stamp.format(LocalTime.now())} $message")
+        // messages quote things from outside (urls, server replies), a line break in one would
+        // pass for a log entry of its own
+        val clean = message.map { if (it.isISOControl()) ' ' else it }.joinToString("")
+        Log.i(TAG, clean)
+        lines.addLast("${stamp.format(LocalTime.now())} $clean")
         while (lines.size > KEEP) lines.removeFirst()
     }
 
