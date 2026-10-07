@@ -2,6 +2,7 @@ package com.chardidathing.litehub.webui
 
 import android.content.res.AssetManager
 import com.chardidathing.litehub.core.config.Pin
+import com.chardidathing.litehub.core.model.LanHost
 import fi.iki.elonen.NanoHTTPD
 import kotlinx.coroutines.runBlocking
 import java.io.ByteArrayInputStream
@@ -26,14 +27,34 @@ class WebServer(port: Int, private val access: HubAccess, private val assets: As
 
     fun stop() = http.stop()
 
-    private val sessions = HashSet<String>()
+    // a session only works under the pin it was issued with, so setting or changing the pin
+    // logs everyone out, and none outlives SESSION_MS
+    private class Session(val pinHash: String, val issuedMs: Long)
+
+    private val sessions = HashMap<String, Session>()
     private val random = SecureRandom()
 
     private fun handle(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response = try {
-        if (!onLan(session.remoteIpAddress)) text(NanoHTTPD.Response.Status.FORBIDDEN, "litehub only answers on the local network")
-        else route(session)
+        when {
+            !onLan(session.remoteIpAddress) -> text(NanoHTTPD.Response.Status.FORBIDDEN, "litehub only answers on the local network")
+            !sameSite(session) -> text(NanoHTTPD.Response.Status.FORBIDDEN, "litehub only answers its own pages")
+            else -> route(session)
+        }
     } catch (e: IOException) {
         text(NanoHTTPD.Response.Status.INTERNAL_ERROR, e.message ?: "something failed reading the request")
+    } catch (e: StackOverflowError) {
+        // a request built to recurse forever gets an error, not a dead app
+        text(NanoHTTPD.Response.Status.INTERNAL_ERROR, "that request was too deep to read")
+    }
+
+    // a dns rebinding page asks for the hub under its own domain, and another site's form posts
+    // carry that site in Origin. the hub's own pages pass both
+    private fun sameSite(s: NanoHTTPD.IHTTPSession): Boolean {
+        val host = s.headers["host"]
+        if (!LanHost.accepts(host)) return false
+        if (s.method == NanoHTTPD.Method.GET || s.method == NanoHTTPD.Method.HEAD) return true
+        val origin = s.headers["origin"] ?: return true
+        return host != null && LanHost.originHost(origin) == host.trim().lowercase()
     }
 
     private fun route(s: NanoHTTPD.IHTTPSession): NanoHTTPD.Response {
@@ -79,7 +100,8 @@ class WebServer(port: Int, private val access: HubAccess, private val assets: As
     }
 
     private fun login(s: NanoHTTPD.IHTTPSession): NanoHTTPD.Response {
-        val stored = access.pinHash ?: return session(text(NanoHTTPD.Response.Status.OK, "no pin set"))
+        // with no pin there's nothing to log in to, every request is let through already
+        val stored = access.pinHash ?: return text(NanoHTTPD.Response.Status.OK, "no pin set")
         val throttle = access.pinThrottle
         if (!throttle.begin()) {
             return text(NanoHTTPD.Response.Status.TOO_MANY_REQUESTS, "too many wrong pins, try again in ${throttle.waitSeconds()} seconds")
@@ -87,20 +109,24 @@ class WebServer(port: Int, private val access: HubAccess, private val assets: As
         val pin = body(s).trim()
         if (!Pin.matches(pin, stored)) return text(NanoHTTPD.Response.Status.UNAUTHORIZED, "wrong pin")
         throttle.succeeded()
-        return session(text(NanoHTTPD.Response.Status.OK, "ok"))
+        return session(text(NanoHTTPD.Response.Status.OK, "ok"), stored)
     }
 
-    private fun session(r: NanoHTTPD.Response): NanoHTTPD.Response {
+    private fun session(r: NanoHTTPD.Response, pinHash: String): NanoHTTPD.Response {
         val token = ByteArray(TOKEN_BYTES).also(random::nextBytes).joinToString("") { "%02x".format(it) }
-        synchronized(sessions) { sessions += token }
+        synchronized(sessions) { sessions[token] = Session(pinHash, System.currentTimeMillis()) }
         r.addHeader("Set-Cookie", "$COOKIE=$token; HttpOnly; SameSite=Strict; Path=/")
         return r
     }
 
     private fun authorised(s: NanoHTTPD.IHTTPSession): Boolean {
-        if (access.pinHash == null) return true
+        val pin = access.pinHash ?: return true
         val token = s.cookies.read(COOKIE) ?: return false
-        return synchronized(sessions) { token in sessions }
+        val now = System.currentTimeMillis()
+        return synchronized(sessions) {
+            sessions.values.removeAll { it.pinHash != pin || now - it.issuedMs > SESSION_MS }
+            token in sessions
+        }
     }
 
     // private ranges, loopback and link local, which is what "the lan" means for a home hub
@@ -149,6 +175,8 @@ class WebServer(port: Int, private val access: HubAccess, private val assets: As
         const val SOCKET_TIMEOUT_MS = 10_000
         const val COOKIE = "litehub_session"
         const val TOKEN_BYTES = 24
+        // a week, then the pin is asked for again
+        const val SESSION_MS = 7 * 24 * 60 * 60 * 1000L
         const val MAX_BODY = 1 shl 20
     }
 }
